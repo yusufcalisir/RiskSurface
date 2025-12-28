@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 10 10 11;
+        --foreground: 225 226 228;
+        --surface: 20 20 23;
+        --border: 57 57 60;
+    }
+
+    body {
+        background-color: #0a0a0b;
+        color: #e1e2e4;
+        @apply antialiased;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+}
+
+@layer components {
+    .glass-panel {
+        background-color: rgba(20, 20, 23, 0.5);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(57, 57, 60, 0.5);
+    }
+
+    .data-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+    }
+
+    /* Custom scrollbar for data-dense areas */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: #39393c;
+        border-radius: 9999px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: #71717a;
+    }
+
+    /* Structural Revelation */
+    .reveal-base {
+        @apply opacity-0;
+        animation: reveal 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    @keyframes reveal {
+        from {
+            opacity: 0;
+            transform: translateY(4px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+}

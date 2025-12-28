@@ -1,0 +1,326 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Activity,
+    AlertCircle,
+    Loader2,
+    Target,
+    BarChart3,
+    Clock,
+    Flame,
+    Users,
+    ShieldAlert
+} from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+    return twMerge(clsx(inputs));
+}
+
+import { API_BASE } from '../config';
+
+interface ChurnFile {
+    path: string;
+    commitCount: number;
+    percent: number;
+}
+
+interface FileOwnership {
+    path: string;
+    topContributor: string;
+    ownershipPercentage: number;
+    riskSignal: 'silo' | 'shared' | 'distributed';
+    isCritical: boolean;
+}
+
+interface ContributorSurface {
+    name: string;
+    criticalFilesCount: number;
+    ownedRiskArea: number;
+    knowledgeSilos: string[];
+}
+
+interface BusFactorAnalysis {
+    available: boolean;
+    reason?: string;
+    riskLevel: 'Low' | 'Moderate' | 'High';
+    fileOwnerships: FileOwnership[];
+    contributorSurfaces: ContributorSurface[];
+    totalContributors: number;
+    busFactor: number;
+}
+
+interface ConcentrationAnalysis {
+    available: boolean;
+    reason?: string;
+    window: string;
+    totalCommitsAnalyzed: number;
+    totalFilesTouched: number;
+    concentrationIndex: number;
+    hotspots: ChurnFile[];
+    ownershipRisk?: BusFactorAnalysis;
+}
+
+interface Props {
+    projectId: string;
+}
+
+export default function RealConcentration({ projectId }: Props) {
+    const [data, setData] = useState<ConcentrationAnalysis | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        fetchConcentration();
+    }, [projectId]);
+
+    const fetchConcentration = async () => {
+        // Reset state to prevent stale data
+        setData(null);
+        setError('');
+        setLoading(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/api/projects/selected`);
+            const json = await res.json();
+            if (json.selected && json.analysis?.concentration) {
+                setData(json.analysis.concentration);
+            } else {
+                setError('No concentration data available');
+            }
+        } catch (err) {
+            setError('Failed to fetch concentration analysis');
+        }
+        setLoading(false);
+    };
+
+    if (loading) return <LoadingState />;
+    if (error || !data || !data.available) {
+        return <UnavailableState reason={error || data?.reason} />;
+    }
+
+    return (
+        <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-700">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
+                <div>
+                    <div className="flex items-center gap-3 mb-1">
+                        <Activity className="text-risk-high" size={20} />
+                        <h2 className="text-sm font-bold uppercase tracking-widest text-white/50">Structural Hotspots</h2>
+                    </div>
+                    <h1 className="text-4xl font-extrabold text-white tracking-tight">Change Concentration</h1>
+                    <p className="text-white/40 mt-1 font-medium">Derived from real commit diffs across {data.window}</p>
+                </div>
+            </div>
+
+            {/* Summary Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="glass-panel rounded-2xl p-6 border border-white/10 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Target size={60} />
+                    </div>
+                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Concentration Index</div>
+                    <div className="text-5xl font-black text-white mb-2">{data.concentrationIndex.toFixed(1)}%</div>
+                    <p className="text-xs text-white/40 leading-relaxed font-medium">
+                        Top 10% of files account for this percentage of all analyzed changes.
+                    </p>
+                </div>
+
+                <div className="glass-panel rounded-2xl p-6 border border-white/10 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Clock size={60} />
+                    </div>
+                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Analysis Scope</div>
+                    <div className="text-3xl font-black text-white mb-1">{data.totalCommitsAnalyzed} Commits</div>
+                    <div className="text-sm font-bold text-risk-high">{data.totalFilesTouched} Files Touched</div>
+                    <p className="text-xs text-white/40 mt-2 leading-relaxed font-medium">
+                        Data window: {data.window}
+                    </p>
+                </div>
+
+                <div className={cn(
+                    "glass-panel rounded-2xl p-6 border transition-all relative overflow-hidden group",
+                    data.ownershipRisk?.riskLevel === 'High' ? "border-risk-critical/30 bg-risk-critical/5 shadow-lg shadow-risk-critical/5" : "border-white/10"
+                )}>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Bus Factor Risk</div>
+                        {data.ownershipRisk && (
+                            <div className={cn(
+                                "px-2 py-0.5 rounded text-[10px] font-black uppercase",
+                                data.ownershipRisk.riskLevel === 'High' ? "bg-risk-critical text-white" :
+                                    data.ownershipRisk.riskLevel === 'Moderate' ? "bg-risk-medium text-black" : "bg-health-good text-black"
+                            )}>
+                                {data.ownershipRisk.riskLevel}
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex items-end gap-3 mb-2">
+                        <div className="text-5xl font-black text-white">{data.ownershipRisk?.busFactor || 0}</div>
+                        <div className="text-sm font-bold text-white/40 mb-1.5">Contributors</div>
+                    </div>
+                    <p className="text-xs text-white/40 leading-relaxed font-medium">
+                        {data.ownershipRisk?.riskLevel === 'High'
+                            ? "Extreme dependency detected on a single point of failure in critical modules."
+                            : "Knowledge is relatively distributed across the contributing team."}
+                    </p>
+                </div>
+            </div>
+
+            {/* Hotspots & Ownership List */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 glass-panel rounded-2xl border border-white/10 overflow-hidden">
+                    <div className="p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <BarChart3 className="text-white/40" size={20} />
+                            <h3 className="font-bold text-white">Top High-Churn Hotspots</h3>
+                        </div>
+                    </div>
+                    <div className="divide-y divide-white/5">
+                        {data.hotspots.map((file, i) => {
+                            const ownership = data.ownershipRisk?.fileOwnerships.find(o => o.path === file.path);
+                            return (
+                                <motion.div
+                                    key={file.path}
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: i * 0.05 }}
+                                    className="p-4 hover:bg-white/5 transition-colors group flex items-center justify-between"
+                                >
+                                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                                        <div className="w-8 h-8 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center font-black text-xs text-white/40">
+                                            {i + 1}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-bold text-white font-mono truncate group-hover:text-risk-high transition-colors">
+                                                {file.path}
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <div className="text-[10px] text-white/30 uppercase font-black">Hotspot Rank #{i + 1}</div>
+                                                {ownership && (
+                                                    <div className={cn(
+                                                        "text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-tight",
+                                                        ownership.riskSignal === 'silo' ? "bg-risk-critical/20 text-risk-critical" :
+                                                            ownership.riskSignal === 'shared' ? "bg-risk-medium/20 text-risk-medium" : "bg-white/5 text-white/40"
+                                                    )}>
+                                                        {ownership.riskSignal === 'silo' ? 'Knowledge Silo' : ownership.riskSignal}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-8 pl-4">
+                                        {ownership && (
+                                            <div className="text-right hidden md:block">
+                                                <div className="text-[10px] font-black text-white/30 uppercase">Primary Owner</div>
+                                                <div className="text-xs font-bold text-white max-w-[120px] truncate">{ownership.topContributor}</div>
+                                            </div>
+                                        )}
+                                        <div className="text-right">
+                                            <div className="text-xs font-bold text-white">{file.commitCount} Commits</div>
+                                            <div className="text-[10px] text-white/30 uppercase font-black">{file.percent.toFixed(1)}% weight</div>
+                                        </div>
+                                        <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden hidden sm:block">
+                                            <motion.div
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${file.percent}%` }}
+                                                transition={{ duration: 1, delay: i * 0.1 }}
+                                                className="h-full bg-risk-high"
+                                            />
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Contributor Dependency Surface */}
+                <div className="space-y-6">
+                    <div className="glass-panel rounded-2xl border border-white/10 overflow-hidden h-full">
+                        <div className="p-6 border-b border-white/10 bg-white/5 flex items-center gap-3">
+                            <Users className="text-white/40" size={20} />
+                            <h3 className="font-bold text-white">Contributor Surface</h3>
+                        </div>
+                        <div className="p-2 divide-y divide-white/5">
+                            {data.ownershipRisk?.contributorSurfaces.map((contributor, i) => (
+                                <motion.div
+                                    key={contributor.name}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.1 }}
+                                    className="p-4 space-y-3"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-bold text-white">{contributor.name}</div>
+                                        <div className="text-[10px] font-bold text-white/40 uppercase">
+                                            {contributor.ownedRiskArea.toFixed(1)}% Risk Area
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="flex justify-between text-[10px] uppercase font-black tracking-widest text-white/30">
+                                            <span>System Ownership</span>
+                                            <span>{contributor.ownedRiskArea.toFixed(0)}%</span>
+                                        </div>
+                                        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                            <motion.div
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${contributor.ownedRiskArea}%` }}
+                                                className={cn(
+                                                    "h-full",
+                                                    contributor.ownedRiskArea > 50 ? "bg-risk-critical" :
+                                                        contributor.ownedRiskArea > 30 ? "bg-risk-medium" : "bg-white/40"
+                                                )}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex-1 px-3 py-2 bg-white/5 rounded-lg border border-white/5">
+                                            <div className="text-[9px] uppercase font-black text-white/20 mb-0.5">Critical Modules</div>
+                                            <div className="text-xs font-bold text-white">{contributor.criticalFilesCount}</div>
+                                        </div>
+                                        <div className="flex-1 px-3 py-2 bg-white/5 rounded-lg border border-white/5">
+                                            <div className="text-[9px] uppercase font-black text-white/20 mb-0.5">Silos</div>
+                                            <div className="text-xs font-bold text-white">{contributor.knowledgeSilos.length}</div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function LoadingState() {
+    return (
+        <div className="flex flex-col items-center justify-center h-[500px] gap-6">
+            <Loader2 className="text-risk-high animate-spin" size={40} />
+            <div className="text-center">
+                <div className="text-white font-black uppercase tracking-widest text-sm mb-1">Analyzing Commits</div>
+                <div className="text-white/20 text-[10px] uppercase font-bold">Extracting Churn Distribution</div>
+            </div>
+        </div>
+    );
+}
+
+function UnavailableState({ reason }: { reason?: string }) {
+    return (
+        <div className="flex flex-col items-center justify-center h-[500px] gap-6 px-12">
+            <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
+                <AlertCircle size={40} className="text-white/10" />
+            </div>
+            <div className="text-center max-w-sm">
+                <h3 className="text-xl font-bold text-white mb-2">Analysis Unavailable</h3>
+                <p className="text-sm text-white/40 leading-relaxed font-medium">
+                    {reason || 'Insufficient commit history to compute change concentration. Try a more active repository.'}
+                </p>
+            </div>
+        </div>
+    );
+}

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE } from '../config';
+import ActivityHeatMap from './ActivityHeatMap';
 
 interface RepoMetadata {
     fullName: string;
@@ -47,6 +48,12 @@ interface CommitTimelinePoint {
     count: number;
 }
 
+interface CommitActivityWeek {
+    total: number;
+    week: number;
+    days: number[];
+}
+
 interface RepoAnalysis {
     fetchedAt: string;
     repoAgeMonths: number;
@@ -58,10 +65,11 @@ interface RepoAnalysis {
     dependencyCount: number;
     fileCount: number;
     directoryCount: number;
-    topDirectories: DirectoryInfo[];
-    dependencies: DependencyDetail[];
-    recentCommits: CommitSummary[];
+    topDirectories: any[];
+    dependencies: any[];
+    recentCommits: any[];
     commitTimeline: CommitTimelinePoint[];
+    commitActivity?: CommitActivityWeek[];
     filesByExtension: Record<string, number>;
     activityScore: number;
     stalenessScore: number;
@@ -224,8 +232,8 @@ export default function RealDashboard({ projectId }: Props) {
         try {
             const res = await fetch(`${API_BASE}/api/analysis/refresh`, { method: 'POST' });
             if (res.ok) {
-                const data = await res.json();
-                setRepo(data);
+                // Backend finished re-analysis, now pull the fresh mapped data
+                await fetchAnalysis();
             }
         } catch (err) {
             console.error(err);
@@ -372,175 +380,130 @@ export default function RealDashboard({ projectId }: Props) {
                 />
             </div>
 
-            {/* Commit Timeline - Real Data Chart */}
-            {analysis?.commitTimeline && analysis.commitTimeline.length > 0 && (
-                <div className="glass-panel rounded-2xl p-6">
-                    <h3 className="font-bold text-lg text-white mb-4 flex items-center gap-2">
-                        <Activity size={18} />
-                        Commit Activity
-                        <span className="text-xs font-normal text-muted ml-2">
-                            ({analysis.totalCommits} total commits)
-                        </span>
-                    </h3>
+            {/* Commit Activity - GitHub Style Heat Map */}
+            <div className="glass-panel rounded-2xl p-6">
+                <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2">
+                    <Activity size={18} className="text-green-400" />
+                    Commit Activity
+                    <span className="text-xs font-normal text-muted ml-2">
+                        (Yearly contribution records)
+                    </span>
+                </h3>
 
-                    {/* Generate filled timeline with all days in range */}
-                    {(() => {
-                        // Build a map of date -> count from real data
-                        const commitMap = new Map<string, number>();
-                        analysis.commitTimeline.forEach(p => commitMap.set(p.date, p.count));
-
-                        // Get date range - last 30 days or from first commit
-                        const today = new Date();
-                        const dates: { date: string; count: number }[] = [];
-
-                        // Show last 30 days
-                        for (let i = 29; i >= 0; i--) {
-                            const d = new Date(today);
-                            d.setDate(d.getDate() - i);
-                            const dateStr = d.toISOString().split('T')[0];
-                            dates.push({
-                                date: dateStr,
-                                count: commitMap.get(dateStr) || 0
-                            });
-                        }
-
-                        const maxCount = Math.max(...dates.map(p => p.count), 1);
-
-                        return (
-                            <>
-                                <div className="h-32 flex items-end gap-[2px]">
-                                    {dates.map((point, i) => {
-                                        const height = point.count > 0 ? Math.max((point.count / maxCount) * 100, 8) : 4;
-                                        const hasCommits = point.count > 0;
-                                        const isBurst = analysis.volatility?.burstPeriods.includes(point.date);
-
-                                        return (
-                                            <div
-                                                key={point.date}
-                                                className={`flex-1 rounded-t cursor-pointer relative group transition-colors ${isBurst ? 'bg-risk-high shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse' :
-                                                    hasCommits ? 'bg-green-500/70 hover:bg-green-500' :
-                                                        'bg-white/10 hover:bg-white/20'
-                                                    }`}
-                                                style={{ height: `${height}%` }}
-                                                title={`${point.date}: ${point.count} commits`}
-                                            >
-                                                <div className="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black/90 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10 border border-white/10">
-                                                    <div className="font-bold">{point.date}</div>
-                                                    <div className={isBurst ? 'text-red-400 font-bold' : hasCommits ? 'text-green-400' : 'text-muted'}>
-                                                        {point.count} commits {isBurst && '• BURST'}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
-                                    <div className="flex items-center gap-6">
-                                        <div>
-                                            <div className="text-[10px] uppercase font-black text-white/30 tracking-widest leading-none mb-1">Volatility Index</div>
-                                            <div className={`text-sm font-black italic ${analysis.volatility?.classification === 'Low' ? 'text-green-400' :
-                                                analysis.volatility?.classification === 'Moderate' ? 'text-yellow-400' : 'text-risk-high'
-                                                }`}>
-                                                {analysis.volatility?.volatilityScore.toFixed(2)} {analysis.volatility?.classification}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] uppercase font-black text-white/30 tracking-widest leading-none mb-1">Daily Baseline</div>
-                                            <div className="text-sm font-bold text-white">
-                                                {analysis.volatility?.baselineActivity.toFixed(1)} <span className="text-[10px] text-white/40 font-medium">avg commits/day</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {analysis.volatility?.burstPeriods && analysis.volatility.burstPeriods.length > 0 && (
-                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-risk-high/10 border border-risk-high/20">
-                                            <Activity size={12} className="text-risk-high animate-pulse" />
-                                            <span className="text-[10px] font-black text-risk-high uppercase tracking-tight">
-                                                {analysis.volatility.burstPeriods.length} Activity Bursts Detected
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex justify-between mt-4 text-[10px] text-white/20 font-mono uppercase tracking-widest">
-                                    <span>{dates[0]?.date}</span>
-                                    <span className="text-white/40 lowercase normal-case tracking-normal italic font-sans">{analysis.volatility?.interpretation}</span>
-                                    <span>{dates[dates.length - 1]?.date}</span>
-                                </div>
-                            </>
-                        );
-                    })()}
-                </div>
-            )}
-            {/* Documentation Drift Analysis - Embedded in Activity/Structure View */}
-            {analysis?.docDrift && analysis.docDrift.available && (
-                <div className="glass-panel rounded-2xl p-6 border border-white/10 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-6 opacity-5">
-                        <FileCode size={120} />
+                {analysis?.commitActivity ? (
+                    <ActivityHeatMap
+                        activity={analysis.commitActivity}
+                        totalCommits={analysis.totalCommits || 0}
+                    />
+                ) : (
+                    <div className="h-24 flex items-center justify-center bg-white/5 rounded-xl border border-dotted border-white/10 italic text-muted text-sm">
+                        Activity analysis pending...
                     </div>
-                    <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2">
-                        <RefreshCw size={18} className="text-blue-400" />
-                        Documentation Drift Analysis
-                    </h3>
+                )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {/* Status Signal */}
-                        <div className="space-y-4">
-                            <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Alignment Status</div>
-                            <div className={`text-2xl font-black ${analysis.docDrift.classification === 'Aligned' ? 'text-green-400' :
-                                analysis.docDrift.classification === 'Code-leading' ? 'text-risk-high' : 'text-blue-400'
+                <div className="flex justify-between items-center mt-6 pt-6 border-t border-white/5 text-[10px] text-white/20 font-mono uppercase tracking-widest">
+                    <div className="flex items-center gap-6">
+                        <div>
+                            <div className="text-[10px] uppercase font-black text-white/30 tracking-widest leading-none mb-1">Volatility Index</div>
+                            <div className={`text-sm font-black italic ${analysis.volatility?.classification === 'Low' ? 'text-green-400' :
+                                analysis.volatility?.classification === 'Moderate' ? 'text-yellow-400' : 'text-risk-high'
                                 }`}>
-                                {analysis.docDrift.classification}
-                            </div>
-                            <p className="text-xs text-white/50 leading-relaxed italic">
-                                "{analysis.docDrift.interpretation}"
-                            </p>
-                        </div>
-
-                        {/* Velocity Metrics */}
-                        <div className="space-y-4">
-                            <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Evolution Metrics</div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <div className="text-xl font-bold text-white">{analysis.docDrift.docCommitCount + analysis.docDrift.mixedCommitCount}</div>
-                                    <div className="text-[10px] text-white/30 uppercase font-black">Doc Commits</div>
-                                </div>
-                                <div>
-                                    <div className="text-xl font-bold text-white">{analysis.docDrift.codeCommitCount + analysis.docDrift.mixedCommitCount}</div>
-                                    <div className="text-[10px] text-white/30 uppercase font-black">Code Commits</div>
-                                </div>
-                            </div>
-                            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden flex">
-                                <div
-                                    className="h-full bg-blue-500"
-                                    style={{ width: `${(analysis.docDrift.docCommitCount / (analysis.docDrift.docCommitCount + analysis.docDrift.codeCommitCount + 0.1)) * 100}%` }}
-                                />
-                                <div
-                                    className="h-full bg-risk-high"
-                                    style={{ width: `${(analysis.docDrift.codeCommitCount / (analysis.docDrift.docCommitCount + analysis.docDrift.codeCommitCount + 0.1)) * 100}%` }}
-                                />
+                                {analysis.volatility?.volatilityScore.toFixed(2)} {analysis.volatility?.classification}
                             </div>
                         </div>
-
-                        {/* Temporal Lead/Lag */}
-                        <div className="space-y-4">
-                            <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Temporal Synchrony</div>
-                            <div className="flex items-end gap-2">
-                                <div className="text-3xl font-black text-white">
-                                    {Math.abs(analysis.docDrift.temporalOffset).toFixed(1)}
-                                </div>
-                                <div className="text-xs font-bold text-white/40 mb-1">Days {analysis.docDrift.temporalOffset > 0 ? 'Lead' : 'Lag'}</div>
-                            </div>
-                            <div className="text-[10px] text-white/30 font-medium leading-relaxed">
-                                {analysis.docDrift.temporalOffset > 0
-                                    ? "Documentation typically precedes code changes (Doc-First)."
-                                    : "Code changes occur before documentation updates (Lagging Docs)."}
+                        <div>
+                            <div className="text-[10px] uppercase font-black text-white/30 tracking-widest leading-none mb-1">Daily Baseline</div>
+                            <div className="text-sm font-bold text-white lowercase normal-case tracking-normal italic font-sans">
+                                {analysis.volatility?.baselineActivity.toFixed(1)} <span className="text-[10px] text-white/40 font-medium">avg commits/day</span>
                             </div>
                         </div>
                     </div>
+
+                    {analysis.volatility?.burstPeriods && analysis.volatility.burstPeriods.length > 0 && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-risk-high/10 border border-risk-high/20">
+                            <Activity size={12} className="text-risk-high animate-pulse" />
+                            <span className="text-[10px] font-black text-risk-high uppercase tracking-tight">
+                                {analysis.volatility.burstPeriods.length} Activity Bursts Detected
+                            </span>
+                        </div>
+                    )}
                 </div>
-            )}
+
+                <div className="mt-4 text-[10px] text-white/40 italic font-sans text-center">
+                    {analysis.volatility?.interpretation}
+                </div>
+            </div>
+
+            {/* Documentation Drift Analysis - Embedded in Activity/Structure View */}
+            {
+                analysis?.docDrift && analysis.docDrift.available && (
+                    <div className="glass-panel rounded-2xl p-6 border border-white/10 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-6 opacity-5">
+                            <FileCode size={120} />
+                        </div>
+                        <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2">
+                            <RefreshCw size={18} className="text-blue-400" />
+                            Documentation Drift Analysis
+                        </h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            {/* Status Signal */}
+                            <div className="space-y-4">
+                                <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Alignment Status</div>
+                                <div className={`text-2xl font-black ${analysis.docDrift.classification === 'Aligned' ? 'text-green-400' :
+                                    analysis.docDrift.classification === 'Code-leading' ? 'text-risk-high' : 'text-blue-400'
+                                    }`}>
+                                    {analysis.docDrift.classification}
+                                </div>
+                                <p className="text-xs text-white/50 leading-relaxed italic">
+                                    "{analysis.docDrift.interpretation}"
+                                </p>
+                            </div>
+
+                            {/* Velocity Metrics */}
+                            <div className="space-y-4">
+                                <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Evolution Metrics</div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div className="text-xl font-bold text-white">{analysis.docDrift.docCommitCount + analysis.docDrift.mixedCommitCount}</div>
+                                        <div className="text-[10px] text-white/30 uppercase font-black">Doc Commits</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-bold text-white">{analysis.docDrift.codeCommitCount + analysis.docDrift.mixedCommitCount}</div>
+                                        <div className="text-[10px] text-white/30 uppercase font-black">Code Commits</div>
+                                    </div>
+                                </div>
+                                <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden flex">
+                                    <div
+                                        className="h-full bg-blue-500"
+                                        style={{ width: `${(analysis.docDrift.docCommitCount / (analysis.docDrift.docCommitCount + analysis.docDrift.codeCommitCount + 0.1)) * 100}%` }}
+                                    />
+                                    <div
+                                        className="h-full bg-risk-high"
+                                        style={{ width: `${(analysis.docDrift.codeCommitCount / (analysis.docDrift.docCommitCount + analysis.docDrift.codeCommitCount + 0.1)) * 100}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Temporal Lead/Lag */}
+                            <div className="space-y-4">
+                                <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Temporal Synchrony</div>
+                                <div className="flex items-end gap-2">
+                                    <div className="text-3xl font-black text-white">
+                                        {Math.abs(analysis.docDrift.temporalOffset).toFixed(1)}
+                                    </div>
+                                    <div className="text-xs font-bold text-white/40 mb-1">Days {analysis.docDrift.temporalOffset > 0 ? 'Lead' : 'Lag'}</div>
+                                </div>
+                                <div className="text-[10px] text-white/30 font-medium leading-relaxed">
+                                    {analysis.docDrift.temporalOffset > 0
+                                        ? "Documentation typically precedes code changes (Doc-First)."
+                                        : "Code changes occur before documentation updates (Lagging Docs)."}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* Two Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -842,59 +805,61 @@ export default function RealDashboard({ projectId }: Props) {
             </div>
 
             {/* Commit Intent Aggregation - Embedded Activity Signal */}
-            {analysis?.intentAnalysis && analysis.intentAnalysis.available && (
-                <div className="glass-panel rounded-2xl p-6 border border-white/10">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                            <Activity size={18} className="text-purple-400" />
-                            Commit Intent Distribution
-                        </h3>
-                        {analysis.intentAnalysis.confidenceWarning && (
-                            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/20 text-[10px] font-bold text-yellow-500 uppercase tracking-tight">
-                                <AlertCircle size={12} />
-                                Intent signals are weak
+            {
+                analysis?.intentAnalysis && analysis.intentAnalysis.available && (
+                    <div className="glass-panel rounded-2xl p-6 border border-white/10">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                                <Activity size={18} className="text-purple-400" />
+                                Commit Intent Distribution
+                            </h3>
+                            {analysis.intentAnalysis.confidenceWarning && (
+                                <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/20 text-[10px] font-bold text-yellow-500 uppercase tracking-tight">
+                                    <AlertCircle size={12} />
+                                    Intent signals are weak
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="md:col-span-1 border-r border-white/5 pr-6">
+                                <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Dominant Focus</div>
+                                <div className="text-2xl font-black text-white capitalize">{analysis.intentAnalysis.dominantIntent}</div>
+                                <p className="text-xs text-white/40 mt-2 leading-relaxed italic">
+                                    "{analysis.intentAnalysis.recentFocusShift}"
+                                </p>
                             </div>
-                        )}
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div className="md:col-span-1 border-r border-white/5 pr-6">
-                            <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Dominant Focus</div>
-                            <div className="text-2xl font-black text-white capitalize">{analysis.intentAnalysis.dominantIntent}</div>
-                            <p className="text-xs text-white/40 mt-2 leading-relaxed italic">
-                                "{analysis.intentAnalysis.recentFocusShift}"
-                            </p>
-                        </div>
-
-                        <div className="md:col-span-3 flex items-center gap-2 h-12">
-                            {Object.entries(analysis.intentAnalysis.percentages)
-                                .sort(([, a], [, b]) => b - a)
-                                .map(([intent, percent]) => (
-                                    <div
-                                        key={intent}
-                                        className="h-full rounded-lg relative group transition-all"
-                                        style={{
-                                            width: `${percent}%`,
-                                            backgroundColor: intent === 'feature' ? '#22c55e' :
-                                                intent === 'fix' ? '#ef4444' :
-                                                    intent === 'perf' ? '#a855f7' :
-                                                        intent === 'refactor' ? '#eab308' :
-                                                            intent === 'docs' ? '#3b82f6' :
-                                                                intent === 'test' ? '#06b6d4' :
-                                                                    intent === 'chore' ? '#71717a' : '#27272a',
-                                            opacity: 0.6
-                                        }}
-                                    >
-                                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black/95 text-white text-[10px] px-2 py-1.5 rounded-lg border border-white/10 z-20 shadow-xl whitespace-nowrap">
-                                            <div className="font-black uppercase">{intent}</div>
-                                            <div className="font-mono">{percent.toFixed(1)}% ({analysis.intentAnalysis?.intents[intent]} commits)</div>
+                            <div className="md:col-span-3 flex items-center gap-2 h-12">
+                                {Object.entries(analysis.intentAnalysis.percentages)
+                                    .sort(([, a], [, b]) => b - a)
+                                    .map(([intent, percent]) => (
+                                        <div
+                                            key={intent}
+                                            className="h-full rounded-lg relative group transition-all"
+                                            style={{
+                                                width: `${percent}%`,
+                                                backgroundColor: intent === 'feature' ? '#22c55e' :
+                                                    intent === 'fix' ? '#ef4444' :
+                                                        intent === 'perf' ? '#a855f7' :
+                                                            intent === 'refactor' ? '#eab308' :
+                                                                intent === 'docs' ? '#3b82f6' :
+                                                                    intent === 'test' ? '#06b6d4' :
+                                                                        intent === 'chore' ? '#71717a' : '#27272a',
+                                                opacity: 0.6
+                                            }}
+                                        >
+                                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-black/95 text-white text-[10px] px-2 py-1.5 rounded-lg border border-white/10 z-20 shadow-xl whitespace-nowrap">
+                                                <div className="font-black uppercase">{intent}</div>
+                                                <div className="font-mono">{percent.toFixed(1)}% ({analysis.intentAnalysis?.intents[intent]} commits)</div>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Recent Commits - Real Data with Intent Labels */}
             <div className="glass-panel rounded-2xl p-6">

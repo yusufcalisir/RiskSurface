@@ -64,6 +64,15 @@ export default function RealTrajectory({ projectId }: Props) {
         try {
             const res = await fetch(`${API_BASE}/api/projects/selected`);
             const data = await res.json();
+
+            // CRITICAL: Validate project context matches expected
+            const returnedFullName = data.project?.fullName;
+            if (returnedFullName && returnedFullName !== projectId) {
+                console.warn(`[RealTrajectory] Project mismatch: expected ${projectId}, got ${returnedFullName}. Retrying...`);
+                setTimeout(() => fetchTrajectory(), 300);
+                return;
+            }
+
             if (data.selected && data.analysis?.trajectory) {
                 setTrajectory(data.analysis.trajectory);
             } else {

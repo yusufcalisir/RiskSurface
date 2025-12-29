@@ -84,6 +84,15 @@ export default function RealConcentration({ projectId }: Props) {
         try {
             const res = await fetch(`${API_BASE}/api/projects/selected`);
             const json = await res.json();
+
+            // CRITICAL: Validate project context matches expected
+            const returnedFullName = json.project?.fullName;
+            if (returnedFullName && returnedFullName !== projectId) {
+                console.warn(`[RealConcentration] Project mismatch: expected ${projectId}, got ${returnedFullName}. Retrying...`);
+                setTimeout(() => fetchConcentration(), 300);
+                return;
+            }
+
             if (json.selected && json.analysis?.concentration) {
                 setData(json.analysis.concentration);
             } else {
@@ -148,10 +157,10 @@ export default function RealConcentration({ projectId }: Props) {
                         {data.ownershipRisk && (
                             <div className={cn(
                                 "px-2 py-0.5 rounded text-[10px] font-black uppercase",
-                                data.ownershipRisk.riskLevel === 'High' ? "bg-risk-critical text-white" :
-                                    data.ownershipRisk.riskLevel === 'Moderate' ? "bg-risk-medium text-black" : "bg-health-good text-black"
+                                data.ownershipRisk?.riskLevel === 'High' ? "bg-risk-critical text-white" :
+                                    data.ownershipRisk?.riskLevel === 'Moderate' ? "bg-risk-medium text-black" : "bg-health-good text-black"
                             )}>
-                                {data.ownershipRisk.riskLevel}
+                                {data.ownershipRisk?.riskLevel || 'N/A'}
                             </div>
                         )}
                     </div>
@@ -177,7 +186,7 @@ export default function RealConcentration({ projectId }: Props) {
                         </div>
                     </div>
                     <div className="divide-y divide-white/5">
-                        {data.hotspots.map((file, i) => {
+                        {(data.hotspots || []).map((file, i) => {
                             const ownership = data.ownershipRisk?.fileOwnerships.find(o => o.path === file.path);
                             return (
                                 <motion.div

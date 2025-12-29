@@ -36,3 +36,7 @@ build_log.txt
 /server/risksurface-server
 /server/risksurface-server.exe
 /server/state.json
+/server/*.exe
+/server/*.txt
+/server/check_api.json
+

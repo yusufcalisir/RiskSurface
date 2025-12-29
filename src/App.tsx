@@ -39,6 +39,7 @@ import RealImpact from './components/RealImpact';
 import RealDependencies from './components/RealDependencies';
 import RealConcentration from './components/RealConcentration';
 import RealTemporal from './components/RealTemporal';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import { API_BASE } from './config';
 
@@ -241,9 +242,9 @@ export default function App() {
             <motion.aside
                 initial={false}
                 animate={{ width: isSidebarCollapsed ? 80 : 260 }}
-                className="hidden md:flex flex-col h-screen border-r border-border bg-surface/30 backdrop-blur-xl shrink-0 z-50"
+                className="hidden md:flex flex-col h-full border-r border-border bg-surface/30 backdrop-blur-xl shrink-0 z-50"
             >
-                <div className="p-6 flex items-center justify-between">
+                <div className="p-3 flex items-center justify-between">
                     {!isSidebarCollapsed && (
                         <motion.span
                             initial={{ opacity: 0 }}
@@ -261,7 +262,7 @@ export default function App() {
                     </button>
                 </div>
 
-                <nav className="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar">
+                <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto custom-scrollbar">
                     {navItems.map((item) => {
                         // Disable analysis tabs if no project selected
                         const isDisabled = item.id !== 'projects' && !selectedProject;
@@ -278,7 +279,7 @@ export default function App() {
                                 }}
                                 disabled={isDisabled}
                                 className={cn(
-                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all relative group",
+                                    "w-full flex items-center gap-3 px-3 py-1.5 rounded-xl transition-all relative group",
                                     activeTab === item.id ? "bg-white/10 text-white" : "text-muted hover:text-white hover:bg-white/5",
                                     isDisabled && "opacity-40 cursor-not-allowed"
                                 )}
@@ -304,7 +305,7 @@ export default function App() {
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-border space-y-4">
+                <div className="p-3 border-t border-border space-y-3">
                     {/* GitHub Connection */}
                     {!connection ? (
                         // Not connected - Show Connect Button
@@ -318,7 +319,7 @@ export default function App() {
                     ) : (
                         // Connected - Show User Info
                         <>
-                            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10">
+                            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
                                 <Github size={20} className="text-green-400" />
                                 {!isSidebarCollapsed && (
                                     <div className="flex-1 min-w-0">
@@ -330,7 +331,6 @@ export default function App() {
                                     </div>
                                 )}
                             </div>
-
                             {/* Selected Project */}
                             {currentProject && !isSidebarCollapsed && (
                                 <ScopeIndicator
@@ -369,20 +369,22 @@ export default function App() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col overflow-hidden relative">
                 {/* Top Header */}
-                <header className="h-16 border-b border-border flex items-center justify-between px-8 shrink-0 z-50 relative" style={{ backgroundColor: '#0a0a0a' }}>
+                <header className="h-16 border-b border-border flex items-center justify-between px-8 bg-surface/50 backdrop-blur-md shrink-0 z-50 relative">
                     <div className="flex items-center gap-6">
-                        <h2 className="text-sm font-bold text-white capitalize">
-                            {(!connection && activeTab === 'projects') ? (
-                                <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-2 px-3 py-1 rounded bg-yellow-500/10 border border-yellow-500/20">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-                                        <span className="text-[10px] font-black text-yellow-500/80 uppercase tracking-widest">Awaiting Feed</span>
-                                    </div>
-                                    <div className="h-4 w-px bg-white/10" />
-                                    <span className="text-[9px] font-bold text-white/20 uppercase tracking-[0.4em]">Signal Status: Pending Connection</span>
+                        {(!connection && activeTab === 'projects') ? (
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 px-3 py-1 rounded bg-yellow-500/10 border border-yellow-500/20">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                                    <span className="text-[10px] font-black text-yellow-500/80 uppercase tracking-widest">Awaiting Feed</span>
                                 </div>
-                            ) : (activeTab === 'projects' ? 'Projects' : currentProject?.name || 'Select a project')}
-                        </h2>
+                                <div className="h-4 w-px bg-white/10" />
+                                <span className="text-[9px] font-bold text-white/20 uppercase tracking-[0.4em]">Signal Status: Pending Connection</span>
+                            </div>
+                        ) : (
+                            <h2 className="text-sm font-bold text-white capitalize">
+                                {activeTab === 'projects' ? 'Projects' : currentProject?.name || 'Select a project'}
+                            </h2>
+                        )}
                         {currentProject && activeTab !== 'projects' && (
                             <>
                                 <div className="h-4 w-px bg-border hidden sm:block" />
@@ -426,41 +428,43 @@ export default function App() {
                                 exit={{ opacity: 0 }}
                                 transition={{ duration: 0.2 }}
                                 className={cn(
-                                    "max-w-[1600px] mx-auto",
+                                    "max-w-[1600px] mx-auto w-full",
                                     (connection || activeTab !== 'projects') ? "space-y-12 pb-32" : "h-full flex items-center"
                                 )}
                             >
-                                {activeTab === 'projects' && (
-                                    <ProjectsGrid
-                                        projects={projects}
-                                        selectedProject={selectedProject}
-                                        analyzingProject={analyzingProject}
-                                        isConnected={!!connection}
-                                        onSelectProject={handleSelectProject}
-                                        onConnect={() => setShowConnectModal(true)}
-                                    />
-                                )}
-                                {activeTab === 'overview' && selectedProject && (
-                                    <RealDashboard key={`dashboard-${projectVersion}`} projectId={selectedProject} />
-                                )}
-                                {activeTab === 'risk-map' && selectedProject && (
-                                    <RealTopology key={`topology-${projectVersion}`} projectId={selectedProject} />
-                                )}
-                                {activeTab === 'history' && selectedProject && (
-                                    <RealTrajectory key={`trajectory-${projectVersion}`} projectId={selectedProject} />
-                                )}
-                                {activeTab === 'impact' && selectedProject && (
-                                    <RealImpact key={`impact-${projectVersion}`} projectId={selectedProject} />
-                                )}
-                                {activeTab === 'dependencies' && selectedProject && (
-                                    <RealDependencies key={`deps-${projectVersion}`} projectId={selectedProject} />
-                                )}
-                                {activeTab === 'concentration' && selectedProject && (
-                                    <RealConcentration key={`concentration-${projectVersion}`} projectId={selectedProject} />
-                                )}
-                                {activeTab === 'temporal' && selectedProject && (
-                                    <RealTemporal key={`temporal-${projectVersion}`} projectId={selectedProject} />
-                                )}
+                                <ErrorBoundary key={`eb-${activeTab}-${projectVersion}`}>
+                                    {activeTab === 'projects' && (
+                                        <ProjectsGrid
+                                            projects={projects}
+                                            selectedProject={selectedProject}
+                                            analyzingProject={analyzingProject}
+                                            isConnected={!!connection}
+                                            onSelectProject={handleSelectProject}
+                                            onConnect={() => setShowConnectModal(true)}
+                                        />
+                                    )}
+                                    {activeTab === 'overview' && selectedProject && (
+                                        <RealDashboard key={`dashboard-${projectVersion}`} projectId={selectedProject} />
+                                    )}
+                                    {activeTab === 'risk-map' && selectedProject && (
+                                        <RealTopology key={`topology-${projectVersion}`} projectId={selectedProject} />
+                                    )}
+                                    {activeTab === 'history' && selectedProject && (
+                                        <RealTrajectory key={`trajectory-${projectVersion}`} projectId={selectedProject} />
+                                    )}
+                                    {activeTab === 'impact' && selectedProject && (
+                                        <RealImpact key={`impact-${projectVersion}`} projectId={selectedProject} />
+                                    )}
+                                    {activeTab === 'dependencies' && selectedProject && (
+                                        <RealDependencies key={`deps-${projectVersion}`} projectId={selectedProject} />
+                                    )}
+                                    {activeTab === 'concentration' && selectedProject && (
+                                        <RealConcentration key={`concentration-${projectVersion}`} projectId={selectedProject} />
+                                    )}
+                                    {activeTab === 'temporal' && selectedProject && (
+                                        <RealTemporal key={`temporal-${projectVersion}`} projectId={selectedProject} />
+                                    )}
+                                </ErrorBoundary>
                             </motion.div>
                         ) : (
                             <div className="max-w-[1600px] mx-auto space-y-12 pb-32">

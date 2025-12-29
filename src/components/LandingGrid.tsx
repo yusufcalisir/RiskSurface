@@ -31,19 +31,19 @@ export default function LandingGrid({ onConnect }: LandingGridProps) {
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.06 }}
-                        className="glass-panel border border-white/5 p-8 rounded-3xl h-[320px] flex flex-col justify-between group hover:border-white/20 transition-all cursor-default relative overflow-hidden"
+                        className="glass-panel border border-white/5 p-6 rounded-3xl h-[280px] flex flex-col justify-between group hover:border-white/20 transition-all cursor-default relative overflow-hidden"
                     >
                         {/* Ghost UI Background Element */}
                         <div className="absolute -bottom-4 -right-4 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity pointer-events-none">
-                            <tile.icon size={160} strokeWidth={1} />
+                            <tile.icon size={120} strokeWidth={1} />
                         </div>
 
                         <div className="relative z-10">
-                            <div className="flex items-center gap-3 mb-6">
+                            <div className="flex items-center gap-3 mb-4">
                                 <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 group-hover:bg-risk-high/10 group-hover:border-risk-high/20 transition-all">
-                                    <tile.icon size={22} className="text-white/40 group-hover:text-risk-high transition-colors" />
+                                    <tile.icon size={20} className="text-white/40 group-hover:text-risk-high transition-colors" />
                                 </div>
-                                <h3 className="font-bold text-xl text-white tracking-tight">{tile.title}</h3>
+                                <h3 className="font-bold text-lg text-white tracking-tight">{tile.title}</h3>
                             </div>
 
                             <div className="space-y-6">

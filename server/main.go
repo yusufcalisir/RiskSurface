@@ -135,6 +135,7 @@ type RepoAnalysis struct {
 	Dependencies      []DependencyDetail           `json:"dependencies"`
 	RecentCommits     []CommitSummary              `json:"recentCommits,omitempty"`
 	CommitTimeline    []CommitTimelinePoint        `json:"commitTimeline"`
+	CommitActivity    []CommitActivityWeek         `json:"commitActivity,omitempty"`
 	FilesByExtension  map[string]int               `json:"filesByExtension"`
 	ActivityScore     float64                      `json:"activityScore"`
 	StalenessScore    float64                      `json:"stalenessScore"`
@@ -285,13 +286,14 @@ type DirectoryInfo struct {
 // ==================== REAL DEPENDENCY GRAPH TYPES ====================
 
 type DependencyNode struct {
-	ID                string  `json:"id"`         // File path
-	Name              string  `json:"name"`       // Module/file name
-	Language          string  `json:"language"`   // py, js, go, ts, or "external"
-	Category          string  `json:"category"`   // internal | external
-	Version           string  `json:"version"`    // from manifest
-	Volatility        float64 `json:"volatility"` // commit frequency in manifest
-	Lag               string  `json:"lag"`        // major | minor | up-to-date | unknown
+	ID                string  `json:"id"`            // File path
+	Name              string  `json:"name"`          // Module/file name
+	Language          string  `json:"language"`      // py, js, go, ts, or "external"
+	Category          string  `json:"category"`      // internal | external
+	Version           string  `json:"version"`       // from manifest
+	LatestVersion     string  `json:"latestVersion"` // Latest available from registry
+	Volatility        float64 `json:"volatility"`    // commit frequency in manifest
+	Lag               string  `json:"lag"`           // major | minor | up-to-date | unknown
 	RiskAmplification float64 `json:"riskAmplification"`
 	FanIn             int     `json:"fanIn"`      // Incoming edges
 	FanOut            int     `json:"fanOut"`     // Outgoing edges
@@ -460,12 +462,13 @@ type DocDriftAnalysis struct {
 }
 
 type TopologyAnalysis struct {
-	Available bool              `json:"available"`
-	Reason    string            `json:"reason,omitempty"`
-	Modules   []TopologyModule  `json:"modules"`
-	Clusters  []TopologyCluster `json:"clusters"`
-	Edges     []TopologyEdge    `json:"edges"`
-	Metrics   TopologyMetrics   `json:"metrics"`
+	Available       bool              `json:"available"`
+	Reason          string            `json:"reason,omitempty"`
+	ProjectFullName string            `json:"projectFullName,omitempty"`
+	Modules         []TopologyModule  `json:"modules"`
+	Clusters        []TopologyCluster `json:"clusters"`
+	Edges           []TopologyEdge    `json:"edges"`
+	Metrics         TopologyMetrics   `json:"metrics"`
 }
 
 type AppState struct {
@@ -800,6 +803,12 @@ func analyzeRepository(client *GitHubClient, owner, repo, defaultBranch string) 
 		commits = []GitHubCommit{}
 	}
 
+	// Fetch yearly commit activity (daily stats for 52 weeks) for the heatmap
+	activity, err := client.GetCommitActivity(owner, repo)
+	if err != nil {
+		log.Printf("[Analysis] Warning: Failed to fetch yearly activity: %v", err)
+	}
+
 	contributors, err := client.GetContributors(owner, repo)
 	if err != nil {
 		log.Printf("[Analysis] Warning: Failed to fetch contributors: %v", err)
@@ -998,6 +1007,7 @@ func analyzeRepository(client *GitHubClient, owner, repo, defaultBranch string) 
 		Dependencies:      dependencies,
 		RecentCommits:     recentCommits,
 		CommitTimeline:    timelineSlice,
+		CommitActivity:    activity,
 		FilesByExtension:  filesByExt,
 		ActivityScore:     activityScore,
 		StalenessScore:    stalenessScore,
@@ -1647,24 +1657,33 @@ func analyzeDependencies(client *GitHubClient, owner, repo string, tree *GitHubT
 		// Volatility: from manifest or file churn
 		node.Volatility = volatilityMap[id]
 
-		// Lag check: dummy logic as we don't have registry access
+		// Version Health: Fetch latest from registry and compare
 		if node.Category == "external" && node.Version != "" {
-			if strings.Contains(node.Version, "^") || strings.Contains(node.Version, "~") {
-				node.Lag = "up-to-date"
-			} else {
-				node.Lag = "minor" // pinned versions are flagged as potentially lagging
+			// Determine the language for registry lookup
+			regLang := "npm" // default for package type
+			if node.Language == "py" || node.Language == "python" {
+				regLang = "python"
+			} else if node.Language == "go" {
+				regLang = "go"
 			}
+
+			// Fetch latest version from registry (limited to external packages)
+			latest := fetchLatestVersion(node.Name, regLang)
+			node.LatestVersion = latest
+			node.Lag = compareVersions(node.Version, latest)
 		} else {
-			node.Lag = "unknown"
+			node.Lag = "n/a" // Internal modules don't have version lag
 		}
 
 		// Risk Amplification = Centrality(40%) + Volatility(40%) + Lag(20%)
 		var lagScore float64
 		switch node.Lag {
-		case "major":
+		case "major-lag":
 			lagScore = 1.0
-		case "minor":
+		case "minor-lag":
 			lagScore = 0.5
+		case "unknown":
+			lagScore = 0.3
 		default:
 			lagScore = 0.0
 		}
@@ -1697,24 +1716,178 @@ func parseManifests(client *GitHubClient, owner, repo string, tree *GitHubTreeRe
 				if line == "" || strings.HasPrefix(line, "#") {
 					continue
 				}
-				parts := strings.SplitN(line, "==", 2)
-				if len(parts) == 2 {
-					versions[parts[0]] = parts[1]
+				// Handle ==, >=, ~=, <=
+				for _, sep := range []string{"==", ">=", "~=", "<="} {
+					parts := strings.SplitN(line, sep, 2)
+					if len(parts) == 2 {
+						versions[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+						break
+					}
 				}
 			}
 		} else if name == "package.json" {
 			content, _ := client.GetFileContent(owner, repo, node.Path)
 			var pkg struct {
-				Deps map[string]string `json:"dependencies"`
+				Deps    map[string]string `json:"dependencies"`
+				DevDeps map[string]string `json:"devDependencies"`
 			}
 			if err := json.Unmarshal(content, &pkg); err == nil {
 				for k, v := range pkg.Deps {
 					versions[k] = v
 				}
+				for k, v := range pkg.DevDeps {
+					versions[k] = v
+				}
+			}
+		} else if name == "go.mod" {
+			content, _ := client.GetFileContent(owner, repo, node.Path)
+			lines := strings.Split(string(content), "\n")
+			inRequire := false
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "require (") || strings.HasPrefix(line, "require(") {
+					inRequire = true
+					continue
+				}
+				if inRequire && line == ")" {
+					inRequire = false
+					continue
+				}
+				if inRequire && line != "" && !strings.HasPrefix(line, "//") {
+					// Format: module/path vX.Y.Z
+					parts := strings.Fields(line)
+					if len(parts) >= 2 {
+						mod := parts[0]
+						ver := parts[1]
+						// Extract short name for easier matching
+						shortName := filepath.Base(mod)
+						versions[mod] = ver
+						versions[shortName] = ver
+					}
+				}
+				// Single-line require
+				if strings.HasPrefix(line, "require ") && !strings.Contains(line, "(") {
+					parts := strings.Fields(line)
+					if len(parts) >= 3 {
+						mod := parts[1]
+						ver := parts[2]
+						shortName := filepath.Base(mod)
+						versions[mod] = ver
+						versions[shortName] = ver
+					}
+				}
 			}
 		}
 	}
 	return versions
+}
+
+// fetchLatestVersion queries package registries for the latest available version
+// Returns the latest version string or empty if unavailable
+func fetchLatestVersion(pkgName, language string) string {
+	client := &http.Client{Timeout: 3 * time.Second}
+	var url string
+
+	switch language {
+	case "npm", "javascript", "typescript", "js", "ts", "jsx", "tsx":
+		// npm registry
+		url = fmt.Sprintf("https://registry.npmjs.org/%s", pkgName)
+	case "python", "py":
+		// PyPI registry
+		url = fmt.Sprintf("https://pypi.org/pypi/%s/json", pkgName)
+	case "go":
+		// Go proxy (returns plain text for @latest)
+		url = fmt.Sprintf("https://proxy.golang.org/%s/@latest", pkgName)
+	default:
+		return ""
+	}
+
+	resp, err := client.Get(url)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+
+	switch language {
+	case "npm", "javascript", "typescript", "js", "ts", "jsx", "tsx":
+		var npmResp struct {
+			DistTags struct {
+				Latest string `json:"latest"`
+			} `json:"dist-tags"`
+		}
+		if err := json.Unmarshal(body, &npmResp); err == nil {
+			return npmResp.DistTags.Latest
+		}
+	case "python", "py":
+		var pypiResp struct {
+			Info struct {
+				Version string `json:"version"`
+			} `json:"info"`
+		}
+		if err := json.Unmarshal(body, &pypiResp); err == nil {
+			return pypiResp.Info.Version
+		}
+	case "go":
+		var goResp struct {
+			Version string `json:"Version"`
+		}
+		if err := json.Unmarshal(body, &goResp); err == nil {
+			return goResp.Version
+		}
+	}
+
+	return ""
+}
+
+// compareVersions determines the lag status between declared and latest versions
+func compareVersions(declared, latest string) string {
+	if declared == "" || latest == "" {
+		return "unknown"
+	}
+
+	// Clean version strings
+	declared = strings.TrimPrefix(declared, "^")
+	declared = strings.TrimPrefix(declared, "~")
+	declared = strings.TrimPrefix(declared, "v")
+	latest = strings.TrimPrefix(latest, "v")
+
+	if declared == latest {
+		return "up-to-date"
+	}
+
+	// Parse major.minor.patch
+	declParts := strings.Split(declared, ".")
+	lateParts := strings.Split(latest, ".")
+
+	if len(declParts) == 0 || len(lateParts) == 0 {
+		return "unknown"
+	}
+
+	// Compare major version
+	var declMajor, lateMajor int
+	fmt.Sscanf(declParts[0], "%d", &declMajor)
+	fmt.Sscanf(lateParts[0], "%d", &lateMajor)
+
+	if lateMajor > declMajor {
+		return "major-lag"
+	}
+
+	// Compare minor version
+	if len(declParts) > 1 && len(lateParts) > 1 {
+		var declMinor, lateMinor int
+		fmt.Sscanf(declParts[1], "%d", &declMinor)
+		fmt.Sscanf(lateParts[1], "%d", &lateMinor)
+		if lateMinor > declMinor {
+			return "minor-lag"
+		}
+	}
+
+	return "up-to-date"
 }
 
 // ==================== CHANGE CONCENTRATION ANALYSIS ====================
@@ -2800,9 +2973,78 @@ func analyzeProject(w http.ResponseWriter, r *http.Request) {
 	stateLock.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":  true,
 		"project":  foundRepo,
+		"analysis": analysis,
+	})
+}
+
+func refreshAnalysis(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	stateLock.RLock()
+	selected := state.SelectedProject
+	stateLock.RUnlock()
+
+	if selected == "" {
+		http.Error(w, "No project selected", 400)
+		return
+	}
+
+	parts := strings.Split(selected, "/")
+	owner, repo := parts[0], parts[1]
+
+	// Find the repo to get the default branch
+	stateLock.RLock()
+	var foundRepo *DiscoveredRepo
+	for i := range state.DiscoveredRepos {
+		if state.DiscoveredRepos[i].FullName == selected {
+			foundRepo = &state.DiscoveredRepos[i]
+			break
+		}
+	}
+	stateLock.RUnlock()
+
+	defaultBranch := "main"
+	if foundRepo != nil && foundRepo.DefaultBranch != "" {
+		defaultBranch = foundRepo.DefaultBranch
+	}
+
+	// Re-run analysis
+	client := NewGitHubClient(githubToken)
+	log.Printf("[Refresh] Refreshing analysis for %s", selected)
+	analysis, err := analyzeRepository(client, owner, repo, defaultBranch)
+	if err != nil {
+		http.Error(w, "Analysis failed: "+err.Error(), 500)
+		return
+	}
+
+	stateLock.Lock()
+	state.Analyses[selected] = analysis
+	// Find project and set it to ready
+	for i := range state.DiscoveredRepos {
+		if state.DiscoveredRepos[i].FullName == selected {
+			state.DiscoveredRepos[i].AnalysisState = "ready"
+			break
+		}
+	}
+	saveState()
+	stateLock.Unlock()
+
+	// Return the same format as getSelectedProject expects
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"selected": true,
+		"project":  map[string]interface{}{"fullName": selected}, // Minimal for now to match frontend mapping
 		"analysis": analysis,
 	})
 }
@@ -3112,6 +3354,7 @@ func getProjectTopology(w http.ResponseWriter, r *http.Request) {
 
 	// Analyze topology
 	topology := analyzeTopology(tree)
+	topology.ProjectFullName = selected // Critical: Tag with project identifier
 
 	log.Printf("[Topology] Analyzed %s: %d modules, %d clusters, %d edges",
 		selected, len(topology.Modules), len(topology.Clusters), len(topology.Edges))
@@ -3194,8 +3437,17 @@ func main() {
 	// Topology
 	http.HandleFunc("/api/topology", corsMiddleware(getProjectTopology))
 
+	// Analysis
+	http.HandleFunc("/api/analysis/refresh", corsMiddleware(refreshAnalysis))
+
+	// Dynamic port for deployment
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	fmt.Println("🚀 RiskSurface API Server (Real Analysis)")
-	fmt.Println("   http://localhost:8080")
+	fmt.Printf("   http://localhost:%s\n", port)
 	fmt.Println("")
 	if githubToken != "" {
 		fmt.Println("   ✅ GitHub Token: Pre-configured from environment")
@@ -3212,7 +3464,7 @@ func main() {
 	fmt.Println("   GET  /api/projects/selected - Get selected project")
 	fmt.Println("   GET  /api/topology          - System topology (real analysis)")
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 // ==================== COMMIT INTENT ANALYSIS ====================

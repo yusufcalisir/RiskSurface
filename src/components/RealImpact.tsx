@@ -66,6 +66,15 @@ export default function RealImpact({ projectId }: Props) {
         try {
             const res = await fetch(`${API_BASE}/api/projects/selected`);
             const data = await res.json();
+
+            // CRITICAL: Validate project context matches expected
+            const returnedFullName = data.project?.fullName;
+            if (returnedFullName && returnedFullName !== projectId) {
+                console.warn(`[RealImpact] Project mismatch: expected ${projectId}, got ${returnedFullName}. Retrying...`);
+                setTimeout(() => fetchImpact(), 300);
+                return;
+            }
+
             if (data.selected && data.analysis?.impact) {
                 setImpact(data.analysis.impact);
             } else {

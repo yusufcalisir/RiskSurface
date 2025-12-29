@@ -55,6 +55,15 @@ export default function RealTemporal({ projectId }: Props) {
         try {
             const res = await fetch(`${API_BASE}/api/projects/selected`);
             const json = await res.json();
+
+            // CRITICAL: Validate project context matches expected
+            const returnedFullName = json.project?.fullName;
+            if (returnedFullName && returnedFullName !== projectId) {
+                console.warn(`[RealTemporal] Project mismatch: expected ${projectId}, got ${returnedFullName}. Retrying...`);
+                setTimeout(() => fetchTemporal(), 300);
+                return;
+            }
+
             if (json.selected && json.analysis?.temporal) {
                 setData(json.analysis.temporal);
             } else {
@@ -72,7 +81,7 @@ export default function RealTemporal({ projectId }: Props) {
     }
 
     const filteredHotspots = data.temporalHotspots.filter(h =>
-        h.path.toLowerCase().includes(filter.toLowerCase())
+        (h.path || '').toLowerCase().includes(filter.toLowerCase())
     );
 
     return (

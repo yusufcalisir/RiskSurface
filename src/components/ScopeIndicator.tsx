@@ -47,9 +47,9 @@ export default function ScopeIndicator({ organization, repository, accessLevel, 
     }
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-2">
             {/* Organization */}
-            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02] border border-border/30">
+            <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-border/30">
                 <Building2 size={14} className="text-muted shrink-0" />
                 <div className="flex-1 min-w-0">
                     <span className="text-[8px] font-black text-muted uppercase tracking-widest block">Organization</span>
@@ -58,7 +58,7 @@ export default function ScopeIndicator({ organization, repository, accessLevel, 
             </div>
 
             {/* Repository */}
-            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02] border border-border/30">
+            <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-border/30">
                 <GitBranch size={14} className="text-muted shrink-0" />
                 <div className="flex-1 min-w-0">
                     <span className="text-[8px] font-black text-muted uppercase tracking-widest block">Connected Repository</span>
@@ -66,14 +66,6 @@ export default function ScopeIndicator({ organization, repository, accessLevel, 
                 </div>
             </div>
 
-            {/* Access Level */}
-            <div className={`flex items-center gap-3 px-3 py-2 rounded-lg ${access.bg} border ${access.border}`}>
-                <AccessIcon size={14} className={access.color} />
-                <div className="flex-1">
-                    <span className="text-[8px] font-black text-muted uppercase tracking-widest block">Access Level</span>
-                    <span className={`text-xs font-bold ${access.color}`}>{access.label}</span>
-                </div>
-            </div>
         </div>
     );
 }

@@ -93,6 +93,14 @@ export default function RealTopology({ projectId }: Props) {
             const res = await fetch(`${API_BASE}/api/topology`);
             const data = await res.json();
             console.log('[RealTopology] Data for project:', projectId, data);
+
+            // CRITICAL: Validate response matches expected project
+            if (data.projectFullName && data.projectFullName !== projectId) {
+                console.warn(`[RealTopology] Project mismatch: expected ${projectId}, got ${data.projectFullName}. Retrying...`);
+                setTimeout(() => fetchTopology(), 300);
+                return;
+            }
+
             setTopology(data);
             setError('');
         } catch (err) {
@@ -172,19 +180,19 @@ export default function RealTopology({ projectId }: Props) {
                 />
                 <MetricCard
                     label="Risk Index"
-                    value={metrics.regionalRiskIndex.toFixed(0)}
+                    value={(metrics.regionalRiskIndex || 0).toFixed(0)}
                     description="Average cluster risk"
-                    color={metrics.regionalRiskIndex >= 75 ? 'red' : metrics.regionalRiskIndex >= 50 ? 'yellow' : 'green'}
+                    color={(metrics.regionalRiskIndex || 0) >= 75 ? 'red' : (metrics.regionalRiskIndex || 0) >= 50 ? 'yellow' : 'green'}
                 />
                 <MetricCard
                     label="Entropy"
-                    value={metrics.entropyDensity}
+                    value={metrics.entropyDensity || 'Low'}
                     description="File distribution variance"
                     color={metrics.entropyDensity === 'High' ? 'red' : metrics.entropyDensity === 'Medium' ? 'yellow' : 'green'}
                 />
                 <MetricCard
                     label="Cascading Debt"
-                    value={metrics.cascadingDebtStatus}
+                    value={metrics.cascadingDebtStatus || 'Stable'}
                     description="Propagation potential"
                     color={metrics.cascadingDebtStatus === 'Active' ? 'red' : metrics.cascadingDebtStatus === 'Neutral' ? 'yellow' : 'green'}
                 />

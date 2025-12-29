@@ -70,6 +70,15 @@ export default function RealDependencies({ projectId }: Props) {
         try {
             const res = await fetch(`${API_BASE}/api/projects/selected`);
             const data = await res.json();
+
+            // CRITICAL: Validate project context matches expected
+            const returnedFullName = data.project?.fullName;
+            if (returnedFullName && returnedFullName !== projectId) {
+                console.warn(`[RealDependencies] Project mismatch: expected ${projectId}, got ${returnedFullName}. Retrying...`);
+                setTimeout(() => fetchDependencies(), 300);
+                return;
+            }
+
             if (data.selected && data.analysis?.deps) {
                 setDeps(data.analysis.deps);
             } else {
@@ -149,7 +158,7 @@ export default function RealDependencies({ projectId }: Props) {
                 </div>
 
                 <div className="space-y-3">
-                    {deps.nodes.map((node, i) => {
+                    {(deps.nodes || []).map((node, i) => {
                         const riskStyle = getRiskColor(node.riskAmplification);
                         const nodeEdges = getNodeEdges(node.id);
                         const isExpanded = selectedNode === node.id;
@@ -170,7 +179,7 @@ export default function RealDependencies({ projectId }: Props) {
                                         <div className="flex items-center gap-4">
                                             <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center border ${riskStyle.border} ${riskStyle.bg}`}>
                                                 <span className={`text-base font-black ${riskStyle.text}`}>
-                                                    {node.riskAmplification.toFixed(0)}
+                                                    {(node.riskAmplification || 0).toFixed(0)}
                                                 </span>
                                                 <span className="text-[7px] uppercase font-black opacity-40">Risk</span>
                                             </div>
@@ -187,7 +196,7 @@ export default function RealDependencies({ projectId }: Props) {
                                         <div className="flex items-center gap-6">
                                             <div className="hidden md:block text-right">
                                                 <div className="text-[9px] uppercase font-bold text-white/20 mb-0.5">Centrality</div>
-                                                <div className="text-sm font-black text-white/60">{(node.centrality * 100).toFixed(0)}%</div>
+                                                <div className="text-sm font-black text-white/60">{((node.centrality || 0) * 100).toFixed(0)}%</div>
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-[9px] uppercase font-bold text-white/20 mb-0.5">Structural</div>

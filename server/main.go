@@ -3132,9 +3132,16 @@ func generatePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read query parameters for context-aware export
+	tab := r.URL.Query().Get("tab")
+	projectParam := r.URL.Query().Get("project")
+
 	stateLock.RLock()
 	conn := state.Connection
 	selected := state.SelectedProject
+	if projectParam != "" {
+		selected = projectParam
+	}
 	var repo *DiscoveredRepo
 	for i := range state.DiscoveredRepos {
 		if state.DiscoveredRepos[i].FullName == selected {
@@ -3146,24 +3153,42 @@ func generatePDF(w http.ResponseWriter, r *http.Request) {
 	stateLock.RUnlock()
 
 	pdf := fpdf.New("P", "mm", "A4", "")
-	pdf.SetAutoPageBreak(false, 0)
+	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
 	pageWidth := 210.0
 	pageHeight := 297.0
 
+	// Header gradient
 	for i := 0; i < 50; i++ {
 		pdf.SetFillColor(15+i/3, 15+i/3, 20+i/2)
 		pdf.Rect(0, float64(i), pageWidth, 1, "F")
 	}
 
+	// Title
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetFont("Helvetica", "B", 26)
 	pdf.Text(15, 22, "RISKSURFACE")
+
+	// Tab-specific subtitle (using frontend tab IDs)
+	tabTitles := map[string]string{
+		"overview":      "Analysis Overview",
+		"risk-map":      "System Topology",
+		"history":       "Risk Trajectory",
+		"impact":        "Impact Surface",
+		"dependencies":  "Dependencies",
+		"concentration": "Concentration",
+		"temporal":      "Temporal Hotspots",
+	}
+	subtitle := tabTitles[tab]
+	if subtitle == "" {
+		subtitle = "Repository Analysis Report"
+	}
 	pdf.SetFont("Helvetica", "", 10)
 	pdf.SetTextColor(130, 130, 130)
-	pdf.Text(15, 30, "Repository Analysis Report")
+	pdf.Text(15, 30, subtitle)
 
+	// Date badge
 	pdf.SetFillColor(35, 35, 40)
 	pdf.RoundedRect(pageWidth-55, 12, 45, 22, 3, "1234", "F")
 	pdf.SetFont("Helvetica", "", 7)
@@ -3173,6 +3198,7 @@ func generatePDF(w http.ResponseWriter, r *http.Request) {
 	pdf.SetTextColor(255, 255, 255)
 	pdf.Text(pageWidth-50, 27, time.Now().Format("Jan 02, 2006"))
 
+	// Info bar
 	pdf.SetFillColor(22, 22, 28)
 	pdf.Rect(0, 50, pageWidth, 18, "F")
 	pdf.SetFont("Helvetica", "", 7)
@@ -3196,51 +3222,290 @@ func generatePDF(w http.ResponseWriter, r *http.Request) {
 
 		pdf.SetFont("Helvetica", "", 7)
 		pdf.SetTextColor(90, 90, 90)
-		pdf.Text(150, 57, "LANGUAGE")
+		pdf.Text(150, 57, "PAGE")
 		pdf.SetFont("Helvetica", "B", 9)
 		pdf.SetTextColor(180, 180, 180)
-		pdf.Text(150, 63, repo.Language)
+		pdf.Text(150, 63, strings.ToUpper(tab))
 	}
+
+	// Content area starts at y=80
+	y := 80.0
 
 	if analysis != nil {
-		y := 80.0
-		a := analysis
-
-		pdf.SetFont("Helvetica", "B", 12)
-		pdf.SetTextColor(255, 255, 255)
-		pdf.Text(15, y, "ANALYSIS RESULTS")
-
-		y += 15
-		metrics := []struct{ label, value string }{
-			{"Files", fmt.Sprintf("%d", a.FileCount)},
-			{"Directories", fmt.Sprintf("%d", a.DirectoryCount)},
-			{"Commits (30d)", fmt.Sprintf("%d", a.CommitsLast30Days)},
-			{"Activity Score", fmt.Sprintf("%.1f/10", a.ActivityScore)},
-			{"Contributors", fmt.Sprintf("%d", a.ContributorCount)},
-			{"Dependencies", fmt.Sprintf("%d", a.DependencyCount)},
-		}
-
-		for _, m := range metrics {
-			pdf.SetFillColor(25, 25, 30)
-			pdf.Rect(15, y, pageWidth-30, 12, "F")
-			pdf.SetFont("Helvetica", "", 9)
-			pdf.SetTextColor(150, 150, 150)
-			pdf.Text(20, y+8, m.label)
-			pdf.SetFont("Helvetica", "B", 10)
+		switch tab {
+		case "overview":
+			pdf.SetFont("Helvetica", "B", 12)
 			pdf.SetTextColor(255, 255, 255)
-			pdf.Text(120, y+8, m.value)
-			y += 14
+			pdf.Text(15, y, "ANALYSIS RESULTS")
+			y += 15
+
+			metrics := []struct{ label, value string }{
+				{"Files", fmt.Sprintf("%d", analysis.FileCount)},
+				{"Directories", fmt.Sprintf("%d", analysis.DirectoryCount)},
+				{"Commits (30d)", fmt.Sprintf("%d", analysis.CommitsLast30Days)},
+				{"Activity Score", fmt.Sprintf("%.1f/10", analysis.ActivityScore)},
+				{"Contributors", fmt.Sprintf("%d", analysis.ContributorCount)},
+				{"Dependencies", fmt.Sprintf("%d", analysis.DependencyCount)},
+			}
+			for _, m := range metrics {
+				pdf.SetFillColor(25, 25, 30)
+				pdf.Rect(15, y, pageWidth-30, 12, "F")
+				pdf.SetFont("Helvetica", "", 9)
+				pdf.SetTextColor(150, 150, 150)
+				pdf.Text(20, y+8, m.label)
+				pdf.SetFont("Helvetica", "B", 10)
+				pdf.SetTextColor(255, 255, 255)
+				pdf.Text(120, y+8, m.value)
+				y += 14
+			}
+
+		case "risk-map":
+			pdf.SetFont("Helvetica", "B", 12)
+			pdf.SetTextColor(255, 255, 255)
+			pdf.Text(15, y, "SYSTEM TOPOLOGY - DEPENDENCY NODES")
+			y += 12
+			if analysis.Deps != nil && analysis.Deps.Nodes != nil {
+				// Table header
+				pdf.SetFillColor(35, 35, 40)
+				pdf.Rect(15, y, pageWidth-30, 10, "F")
+				pdf.SetFont("Helvetica", "B", 8)
+				pdf.SetTextColor(200, 200, 200)
+				pdf.Text(20, y+7, "Name")
+				pdf.Text(80, y+7, "Language")
+				pdf.Text(110, y+7, "Fan In")
+				pdf.Text(135, y+7, "Fan Out")
+				pdf.Text(160, y+7, "Risk")
+				y += 12
+				for i, node := range analysis.Deps.Nodes {
+					if i >= 20 || y > pageHeight-30 {
+						break
+					}
+					pdf.SetFillColor(25, 25, 30)
+					pdf.Rect(15, y, pageWidth-30, 10, "F")
+					pdf.SetFont("Helvetica", "", 8)
+					pdf.SetTextColor(180, 180, 180)
+					name := node.Name
+					if len(name) > 25 {
+						name = name[:22] + "..."
+					}
+					pdf.Text(20, y+7, name)
+					pdf.Text(80, y+7, node.Language)
+					pdf.Text(110, y+7, fmt.Sprintf("%d", node.FanIn))
+					pdf.Text(135, y+7, fmt.Sprintf("%d", node.FanOut))
+					pdf.Text(160, y+7, fmt.Sprintf("%.1f", node.RiskScore))
+					y += 12
+				}
+			}
+
+		case "history":
+			pdf.SetFont("Helvetica", "B", 12)
+			pdf.SetTextColor(255, 255, 255)
+			pdf.Text(15, y, "RISK TRAJECTORY - WEEKLY SNAPSHOTS")
+			y += 12
+			if analysis.Trajectory != nil && analysis.Trajectory.Snapshots != nil {
+				pdf.SetFillColor(35, 35, 40)
+				pdf.Rect(15, y, pageWidth-30, 10, "F")
+				pdf.SetFont("Helvetica", "B", 8)
+				pdf.SetTextColor(200, 200, 200)
+				pdf.Text(20, y+7, "Week")
+				pdf.Text(55, y+7, "Commits")
+				pdf.Text(85, y+7, "Additions")
+				pdf.Text(115, y+7, "Deletions")
+				pdf.Text(145, y+7, "Risk Score")
+				y += 12
+				for i, s := range analysis.Trajectory.Snapshots {
+					if i >= 15 || y > pageHeight-30 {
+						break
+					}
+					pdf.SetFillColor(25, 25, 30)
+					pdf.Rect(15, y, pageWidth-30, 10, "F")
+					pdf.SetFont("Helvetica", "", 8)
+					pdf.SetTextColor(180, 180, 180)
+					pdf.Text(20, y+7, s.Date)
+					pdf.Text(55, y+7, fmt.Sprintf("%d", s.CommitCount))
+					pdf.Text(85, y+7, fmt.Sprintf("%d", s.Additions))
+					pdf.Text(115, y+7, fmt.Sprintf("%d", s.Deletions))
+					pdf.Text(145, y+7, fmt.Sprintf("%.2f", s.RiskScore))
+					y += 12
+				}
+			}
+
+		case "impact":
+			pdf.SetFont("Helvetica", "B", 12)
+			pdf.SetTextColor(255, 255, 255)
+			pdf.Text(15, y, "IMPACT SURFACE - FRAGILITY ANALYSIS")
+			y += 12
+			if analysis.Impact != nil && analysis.Impact.ImpactUnits != nil {
+				pdf.SetFillColor(35, 35, 40)
+				pdf.Rect(15, y, pageWidth-30, 10, "F")
+				pdf.SetFont("Helvetica", "B", 8)
+				pdf.SetTextColor(200, 200, 200)
+				pdf.Text(20, y+7, "Module")
+				pdf.Text(80, y+7, "Fragility")
+				pdf.Text(110, y+7, "Blast Radius")
+				pdf.Text(145, y+7, "Trend")
+				y += 12
+				for i, u := range analysis.Impact.ImpactUnits {
+					if i >= 15 || y > pageHeight-30 {
+						break
+					}
+					pdf.SetFillColor(25, 25, 30)
+					pdf.Rect(15, y, pageWidth-30, 10, "F")
+					pdf.SetFont("Helvetica", "", 8)
+					pdf.SetTextColor(180, 180, 180)
+					name := u.Name
+					if len(name) > 25 {
+						name = name[:22] + "..."
+					}
+					pdf.Text(20, y+7, name)
+					pdf.Text(80, y+7, fmt.Sprintf("%.1f%%", u.FragilityScore))
+					pdf.Text(110, y+7, fmt.Sprintf("%d", u.BlastRadius))
+					pdf.Text(145, y+7, u.Trend)
+					y += 12
+				}
+			}
+
+		case "dependencies":
+			pdf.SetFont("Helvetica", "B", 12)
+			pdf.SetTextColor(255, 255, 255)
+			pdf.Text(15, y, "DEPENDENCIES - DETAIL VIEW")
+			y += 12
+			if analysis.Deps != nil && analysis.Deps.Nodes != nil {
+				pdf.SetFillColor(35, 35, 40)
+				pdf.Rect(15, y, pageWidth-30, 10, "F")
+				pdf.SetFont("Helvetica", "B", 8)
+				pdf.SetTextColor(200, 200, 200)
+				pdf.Text(20, y+7, "Name")
+				pdf.Text(80, y+7, "Version")
+				pdf.Text(115, y+7, "Category")
+				pdf.Text(150, y+7, "Risk")
+				y += 12
+				for i, dep := range analysis.Deps.Nodes {
+					if i >= 20 || y > pageHeight-30 {
+						break
+					}
+					pdf.SetFillColor(25, 25, 30)
+					pdf.Rect(15, y, pageWidth-30, 10, "F")
+					pdf.SetFont("Helvetica", "", 8)
+					pdf.SetTextColor(180, 180, 180)
+					name := dep.Name
+					if len(name) > 25 {
+						name = name[:22] + "..."
+					}
+					pdf.Text(20, y+7, name)
+					pdf.Text(80, y+7, dep.Version)
+					pdf.Text(115, y+7, dep.Category)
+					pdf.Text(150, y+7, fmt.Sprintf("%.1f", dep.RiskScore))
+					y += 12
+				}
+			}
+
+		case "concentration":
+			pdf.SetFont("Helvetica", "B", 12)
+			pdf.SetTextColor(255, 255, 255)
+			pdf.Text(15, y, "CONCENTRATION - HOTSPOT FILES")
+			y += 12
+			if analysis.Concentration != nil && analysis.Concentration.Hotspots != nil {
+				pdf.SetFillColor(35, 35, 40)
+				pdf.Rect(15, y, pageWidth-30, 10, "F")
+				pdf.SetFont("Helvetica", "B", 8)
+				pdf.SetTextColor(200, 200, 200)
+				pdf.Text(20, y+7, "Path")
+				pdf.Text(120, y+7, "Commits")
+				pdf.Text(150, y+7, "% of Total")
+				y += 12
+				for i, c := range analysis.Concentration.Hotspots {
+					if i >= 20 || y > pageHeight-30 {
+						break
+					}
+					pdf.SetFillColor(25, 25, 30)
+					pdf.Rect(15, y, pageWidth-30, 10, "F")
+					pdf.SetFont("Helvetica", "", 8)
+					pdf.SetTextColor(180, 180, 180)
+					path := c.Path
+					if len(path) > 40 {
+						path = "..." + path[len(path)-37:]
+					}
+					pdf.Text(20, y+7, path)
+					pdf.Text(120, y+7, fmt.Sprintf("%d", c.CommitCount))
+					pdf.Text(150, y+7, fmt.Sprintf("%.1f%%", c.Percent))
+					y += 12
+				}
+			}
+
+		case "temporal":
+			pdf.SetFont("Helvetica", "B", 12)
+			pdf.SetTextColor(255, 255, 255)
+			pdf.Text(15, y, "TEMPORAL HOTSPOTS")
+			y += 12
+			if analysis.Temporal != nil && analysis.Temporal.TemporalHotspots != nil {
+				pdf.SetFillColor(35, 35, 40)
+				pdf.Rect(15, y, pageWidth-30, 10, "F")
+				pdf.SetFont("Helvetica", "B", 8)
+				pdf.SetTextColor(200, 200, 200)
+				pdf.Text(20, y+7, "Path")
+				pdf.Text(100, y+7, "Commits")
+				pdf.Text(130, y+7, "Severity")
+				pdf.Text(160, y+7, "Type")
+				y += 12
+				for i, h := range analysis.Temporal.TemporalHotspots {
+					if i >= 15 || y > pageHeight-30 {
+						break
+					}
+					pdf.SetFillColor(25, 25, 30)
+					pdf.Rect(15, y, pageWidth-30, 10, "F")
+					pdf.SetFont("Helvetica", "", 8)
+					pdf.SetTextColor(180, 180, 180)
+					path := h.Path
+					if len(path) > 30 {
+						path = "..." + path[len(path)-27:]
+					}
+					pdf.Text(20, y+7, path)
+					pdf.Text(100, y+7, fmt.Sprintf("%d", h.CommitCount))
+					pdf.Text(130, y+7, fmt.Sprintf("%.1f", h.SeverityScore))
+					pdf.Text(160, y+7, h.Classification)
+					y += 12
+				}
+			}
+
+		default:
+			// Fallback to analysis overview
+			pdf.SetFont("Helvetica", "B", 12)
+			pdf.SetTextColor(255, 255, 255)
+			pdf.Text(15, y, "ANALYSIS RESULTS")
+			y += 15
+			metrics := []struct{ label, value string }{
+				{"Files", fmt.Sprintf("%d", analysis.FileCount)},
+				{"Directories", fmt.Sprintf("%d", analysis.DirectoryCount)},
+				{"Commits (30d)", fmt.Sprintf("%d", analysis.CommitsLast30Days)},
+				{"Activity Score", fmt.Sprintf("%.1f/10", analysis.ActivityScore)},
+				{"Contributors", fmt.Sprintf("%d", analysis.ContributorCount)},
+				{"Dependencies", fmt.Sprintf("%d", analysis.DependencyCount)},
+			}
+			for _, m := range metrics {
+				pdf.SetFillColor(25, 25, 30)
+				pdf.Rect(15, y, pageWidth-30, 12, "F")
+				pdf.SetFont("Helvetica", "", 9)
+				pdf.SetTextColor(150, 150, 150)
+				pdf.Text(20, y+8, m.label)
+				pdf.SetFont("Helvetica", "B", 10)
+				pdf.SetTextColor(255, 255, 255)
+				pdf.Text(120, y+8, m.value)
+				y += 14
+			}
 		}
 	}
 
+	// Footer
 	pdf.SetFillColor(12, 12, 15)
 	pdf.Rect(0, pageHeight-15, pageWidth, 15, "F")
 	pdf.SetFont("Helvetica", "", 7)
 	pdf.SetTextColor(70, 70, 70)
 	pdf.Text(15, pageHeight-6, "Generated by RiskSurface")
 
+	filename := fmt.Sprintf("%s_%s.pdf", strings.ReplaceAll(selected, "/", "-"), tab)
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", "attachment; filename=risksurface-report.pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	pdf.Output(w)
 }
 
@@ -3250,13 +3515,29 @@ func generateCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read query parameters
+	tab := r.URL.Query().Get("tab")
+	projectParam := r.URL.Query().Get("project")
+
 	stateLock.RLock()
 	selected := state.SelectedProject
+	if projectParam != "" {
+		selected = projectParam
+	}
 	analysis := state.Analyses[selected]
 	stateLock.RUnlock()
 
 	var csv string
-	if analysis != nil {
+	if analysis == nil {
+		csv = "No project selected or analyzed"
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", "attachment; filename=risksurface.csv")
+		w.Write([]byte(csv))
+		return
+	}
+
+	switch tab {
+	case "overview":
 		csv = fmt.Sprintf(`Metric,Value
 Repository,%s
 Files,%d
@@ -3266,12 +3547,71 @@ Activity Score,%.1f
 Contributors,%d
 Dependencies,%d
 `, selected, analysis.FileCount, analysis.DirectoryCount, analysis.CommitsLast30Days, analysis.ActivityScore, analysis.ContributorCount, analysis.DependencyCount)
-	} else {
-		csv = "No project selected or analyzed"
+
+	case "risk-map":
+		csv = "Node ID,Name,Language,Category,Fan In,Fan Out,Risk Score\n"
+		if analysis.Deps != nil && analysis.Deps.Nodes != nil {
+			for _, node := range analysis.Deps.Nodes {
+				csv += fmt.Sprintf("%s,%s,%s,%s,%d,%d,%.2f\n", node.ID, node.Name, node.Language, node.Category, node.FanIn, node.FanOut, node.RiskScore)
+			}
+		}
+
+	case "history":
+		csv = "Week,Week Start,Commit Count,Additions,Deletions,Churn Score,Risk Score,Risk Delta\n"
+		if analysis.Trajectory != nil && analysis.Trajectory.Snapshots != nil {
+			for _, s := range analysis.Trajectory.Snapshots {
+				csv += fmt.Sprintf("%s,%s,%d,%d,%d,%.2f,%.2f,%.2f\n", s.Date, s.WeekStart, s.CommitCount, s.Additions, s.Deletions, s.ChurnScore, s.RiskScore, s.RiskDelta)
+			}
+		}
+
+	case "impact":
+		csv = "Module Name,Fragility Score,Exposure Scope,Blast Radius,Trend,Fan In,Fan Out,Is Cyclic\n"
+		if analysis.Impact != nil && analysis.Impact.ImpactUnits != nil {
+			for _, u := range analysis.Impact.ImpactUnits {
+				csv += fmt.Sprintf("%s,%.2f,%s,%d,%s,%d,%d,%t\n", u.Name, u.FragilityScore, u.ExposureScope, u.BlastRadius, u.Trend, u.FanIn, u.FanOut, u.IsCyclic)
+			}
+		}
+
+	case "dependencies":
+		csv = "Name,Version,Type,Language,Category,Fan In,Fan Out,Risk Score\n"
+		if analysis.Deps != nil && analysis.Deps.Nodes != nil {
+			for _, dep := range analysis.Deps.Nodes {
+				csv += fmt.Sprintf("%s,%s,%s,%s,%s,%d,%d,%.2f\n", dep.Name, dep.Version, dep.Language, dep.Language, dep.Category, dep.FanIn, dep.FanOut, dep.RiskScore)
+			}
+		}
+
+	case "concentration":
+		csv = "Path,Commit Count,Percent of Total\n"
+		if analysis.Concentration != nil && analysis.Concentration.Hotspots != nil {
+			for _, c := range analysis.Concentration.Hotspots {
+				csv += fmt.Sprintf("%s,%d,%.2f\n", c.Path, c.CommitCount, c.Percent)
+			}
+		}
+
+	case "temporal":
+		csv = "Path,Commit Count,Severity Score,Classification,Mean Interval (hrs)\n"
+		if analysis.Temporal != nil && analysis.Temporal.TemporalHotspots != nil {
+			for _, h := range analysis.Temporal.TemporalHotspots {
+				csv += fmt.Sprintf("%s,%d,%.2f,%s,%.2f\n", h.Path, h.CommitCount, h.SeverityScore, h.Classification, h.MeanIntervalHr)
+			}
+		}
+
+	default:
+		// Default to analysis overview
+		csv = fmt.Sprintf(`Metric,Value
+Repository,%s
+Files,%d
+Directories,%d
+Commits (30d),%d
+Activity Score,%.1f
+Contributors,%d
+Dependencies,%d
+`, selected, analysis.FileCount, analysis.DirectoryCount, analysis.CommitsLast30Days, analysis.ActivityScore, analysis.ContributorCount, analysis.DependencyCount)
 	}
 
+	filename := fmt.Sprintf("%s_%s.csv", strings.ReplaceAll(selected, "/", "-"), tab)
 	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Disposition", "attachment; filename=risksurface.csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	w.Write([]byte(csv))
 }
 
@@ -3355,9 +3695,16 @@ func generateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read query parameters
+	tab := r.URL.Query().Get("tab")
+	projectParam := r.URL.Query().Get("project")
+
 	stateLock.RLock()
 	conn := state.Connection
 	selected := state.SelectedProject
+	if projectParam != "" {
+		selected = projectParam
+	}
 	var repo *DiscoveredRepo
 	for i := range state.DiscoveredRepos {
 		if state.DiscoveredRepos[i].FullName == selected {
@@ -3368,15 +3715,67 @@ func generateJSON(w http.ResponseWriter, r *http.Request) {
 	analysis := state.Analyses[selected]
 	stateLock.RUnlock()
 
-	data := map[string]interface{}{
-		"connection": conn,
-		"project":    repo,
-		"analysis":   analysis,
-		"generated":  time.Now().Format(time.RFC3339),
+	// Build tab-specific response
+	var data map[string]interface{}
+
+	switch tab {
+	case "history":
+		data = map[string]interface{}{
+			"tab":        "trajectory",
+			"project":    selected,
+			"trajectory": analysis.Trajectory,
+			"generated":  time.Now().Format(time.RFC3339),
+		}
+	case "risk-map":
+		data = map[string]interface{}{
+			"tab":       "topology",
+			"project":   selected,
+			"deps":      analysis.Deps,
+			"generated": time.Now().Format(time.RFC3339),
+		}
+	case "impact":
+		data = map[string]interface{}{
+			"tab":       "impact",
+			"project":   selected,
+			"impact":    analysis.Impact,
+			"generated": time.Now().Format(time.RFC3339),
+		}
+	case "dependencies":
+		data = map[string]interface{}{
+			"tab":          "dependencies",
+			"project":      selected,
+			"deps":         analysis.Deps,
+			"dependencies": analysis.Dependencies,
+			"generated":    time.Now().Format(time.RFC3339),
+		}
+	case "concentration":
+		data = map[string]interface{}{
+			"tab":           "concentration",
+			"project":       selected,
+			"concentration": analysis.Concentration,
+			"generated":     time.Now().Format(time.RFC3339),
+		}
+	case "temporal":
+		data = map[string]interface{}{
+			"tab":       "hotspots",
+			"project":   selected,
+			"temporal":  analysis.Temporal,
+			"generated": time.Now().Format(time.RFC3339),
+		}
+	default:
+		// Full analysis export
+		data = map[string]interface{}{
+			"tab":        tab,
+			"connection": conn,
+			"project":    repo,
+			"analysis":   analysis,
+			"generated":  time.Now().Format(time.RFC3339),
+		}
 	}
 
+	filename := fmt.Sprintf("%s_%s.json", strings.ReplaceAll(selected, "/", "-"), tab)
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", "attachment; filename=risksurface.json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	json.NewEncoder(w).Encode(data)
 }
 

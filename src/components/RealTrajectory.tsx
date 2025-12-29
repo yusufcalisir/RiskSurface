@@ -113,11 +113,12 @@ export default function RealTrajectory({ projectId }: Props) {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
-                        <History className="text-purple-400" size={20} />
-                        <h2 className="text-sm font-bold uppercase tracking-widest text-white/50">Architectural Pulse</h2>
+                        <History className="text-purple-400" size={18} />
+                        <h2 className="text-[10px] md:text-sm font-black uppercase tracking-widest text-white/30">Architectural Pulse</h2>
                     </div>
-                    <h1 className="text-4xl font-extrabold text-white tracking-tight">Risk Trajectory</h1>
+                    <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">Risk Trajectory</h1>
                 </div>
+
 
                 <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 self-start">
                     {(['7d', '30d', 'all'] as TimeWindow[]).map((w) => (

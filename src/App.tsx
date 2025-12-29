@@ -12,8 +12,10 @@ import {
     Settings,
     Github,
     LogOut,
-    FolderKanban
+    FolderKanban,
+    Loader2
 } from 'lucide-react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -100,6 +102,7 @@ export default function App() {
     // UI state
     const [activeTab, setActiveTab] = useState('projects');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isAnalysisReady, setIsAnalysisReady] = useState(true);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isExportOpen, setIsExportOpen] = useState(false);
@@ -108,6 +111,11 @@ export default function App() {
     useEffect(() => {
         checkConnection();
     }, []);
+
+    // Close mobile menu on tab change
+    useEffect(() => {
+        setIsMobileMenuOpen(false);
+    }, [activeTab]);
 
     const checkConnection = async () => {
         setIsCheckingConnection(true);
@@ -172,23 +180,16 @@ export default function App() {
         // Check if project is already analyzed
         const project = projects.find(p => p.fullName === fullName);
         if (project?.analysisState === 'ready') {
-            // Project already analyzed, but we MUST tell the backend we selected it
-            // so that subsequent fetch calls (like /api/projects/selected) return the correct project.
             try {
                 await fetch(`${API_BASE}/api/projects/selected`, {
                     method: 'POST',
                     body: JSON.stringify({ fullName }),
                     headers: { 'Content-Type': 'application/json' }
                 });
-
-                // Re-fetch projects to sync any state
                 await fetchProjects();
-
-                // Switch to overview immediately after backend is synced
                 setActiveTab('overview');
             } catch (err) {
                 console.error('Failed to select project on backend', err);
-                // Fallback: try to switch anyway, though data might be stale/wrong
                 setActiveTab('overview');
             }
             setAnalyzingProject(null);
@@ -204,7 +205,6 @@ export default function App() {
             const data = await res.json();
 
             if (data.success) {
-                // Re-fetch projects to sync with backend
                 await fetchProjects();
                 setActiveTab('overview');
             }
@@ -219,7 +219,7 @@ export default function App() {
     if (isCheckingConnection) {
         return (
             <div className="flex h-screen w-screen items-center justify-center bg-background">
-                <div className="text-muted">Loading...</div>
+                <Loader2 className="w-8 h-8 text-risk-high animate-spin" />
             </div>
         );
     }
@@ -227,9 +227,136 @@ export default function App() {
     // Get selected project details
     const currentProject = projects.find(p => p.fullName === selectedProject);
 
+    const SidebarContent = () => (
+        <>
+            <div className="p-3 flex items-center justify-between h-16 shrink-0">
+                <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className={cn(
+                        "font-black tracking-tighter text-2xl bg-gradient-to-r from-white via-white to-gray-500 bg-clip-text text-transparent px-2",
+                        isSidebarCollapsed && "md:hidden"
+                    )}
+                >
+                    RISKSURFACE
+                </motion.span>
+                <button
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    className="hidden md:flex p-1.5 rounded-md hover:bg-white/5 transition-colors border border-border/50"
+                >
+                    {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+                </button>
+                <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="md:hidden p-2 rounded-lg hover:bg-white/5 transition-colors"
+                >
+                    <ChevronLeft size={24} />
+                </button>
+            </div>
+
+            <nav className="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar pt-4">
+                {navItems.map((item) => {
+                    const isDisabled = item.id !== 'projects' && !selectedProject;
+                    const isActive = activeTab === item.id;
+
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => {
+                                if (isDisabled) return;
+                                if (isActive) return;
+                                setIsAnalysisReady(false);
+                                setActiveTab(item.id);
+                                setTimeout(() => setIsAnalysisReady(true), 400);
+                            }}
+                            disabled={isDisabled}
+                            className={cn(
+                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all relative group",
+                                isActive ? "bg-white/10 text-white shadow-[0_4px_20px_rgba(0,0,0,0.3)]" : "text-muted hover:text-white hover:bg-white/5",
+                                isDisabled && "opacity-30 cursor-not-allowed"
+                            )}
+                        >
+                            <item.icon size={20} className={cn(isActive ? "text-risk-high drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "text-muted group-hover:text-white")} />
+                            <span className={cn(
+                                "font-bold tracking-tight text-sm",
+                                isSidebarCollapsed && "md:hidden"
+                            )}>
+                                {item.label}
+                            </span>
+                            {isActive && (
+                                <motion.div
+                                    layoutId="nav-active"
+                                    className="absolute left-0 w-1 h-6 bg-risk-high rounded-full"
+                                />
+                            )}
+                        </button>
+                    );
+                })}
+            </nav>
+
+            <div className="p-4 border-t border-white/5 space-y-4 bg-surface/20">
+                {!connection ? (
+                    <button
+                        onClick={() => {
+                            setShowConnectModal(true);
+                            setIsMobileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-center gap-3 px-3 py-3 rounded-xl bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-white/90 transition-all shadow-xl shadow-white/5"
+                    >
+                        <Github size={18} />
+                        <span className={cn(isSidebarCollapsed && "md:hidden")}>Connect GitHub</span>
+                    </button>
+                ) : (
+                    <>
+                        <div className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10",
+                            isSidebarCollapsed && "md:justify-center p-2"
+                        )}>
+                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center shrink-0">
+                                <Github size={18} className="text-green-400" />
+                            </div>
+                            {!isSidebarCollapsed && (
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-black text-white truncate uppercase tracking-tight">{connection.username}</div>
+                                    <div className="text-[10px] text-muted font-mono">{projects.length} Repositories</div>
+                                </div>
+                            )}
+                        </div>
+
+                        {currentProject && !isSidebarCollapsed && (
+                            <ScopeIndicator
+                                organization={connection?.organization || currentProject.owner}
+                                repository={currentProject.fullName}
+                                accessLevel="full"
+                                isExpanded={true}
+                            />
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => setIsSettingsOpen(true)}
+                                className="flex items-center justify-center h-10 rounded-xl bg-white/5 border border-white/5 text-muted hover:text-white hover:bg-white/10 transition-all"
+                                title="Settings"
+                            >
+                                <Settings size={18} />
+                            </button>
+                            <button
+                                onClick={handleDisconnect}
+                                className="flex items-center justify-center h-10 rounded-xl bg-red-500/10 border border-red-500/10 text-muted hover:text-red-400 hover:bg-red-500/20 transition-all"
+                                title="Disconnect"
+                            >
+                                <LogOut size={18} />
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </>
+    );
+
     return (
-        <div className="flex h-screen w-screen overflow-hidden bg-background text-[#e1e2e4] font-sans">
-            {/* GitHub Connect Modal - Only shown when user explicitly requests */}
+        <div className="flex h-screen w-screen overflow-hidden bg-[#0a0a0b] text-[#e1e2e4] font-sans selection:bg-risk-high/30">
+            {/* GitHub Connect Modal */}
             <AnimatePresence>
                 {showConnectModal && (
                     <GitHubConnectModal
@@ -238,198 +365,110 @@ export default function App() {
                     />
                 )}
             </AnimatePresence>
+
+            {/* Sidebar Mobile Overlay */}
+            <AnimatePresence>
+                {isMobileMenuOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] md:hidden"
+                        />
+                        <motion.aside
+                            initial={{ x: '-100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '-100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed inset-y-0 left-0 w-[280px] bg-surface/95 backdrop-blur-2xl border-r border-white/10 z-[70] flex flex-col md:hidden"
+                        >
+                            <SidebarContent />
+                        </motion.aside>
+                    </>
+                )}
+            </AnimatePresence>
+
             {/* Sidebar Desktop */}
             <motion.aside
                 initial={false}
                 animate={{ width: isSidebarCollapsed ? 80 : 260 }}
-                className="hidden md:flex flex-col h-full border-r border-border bg-surface/30 backdrop-blur-xl shrink-0 z-50"
+                className="hidden md:flex flex-col h-full border-r border-white/5 bg-surface/10 backdrop-blur-xl shrink-0 z-50 overflow-hidden"
             >
-                <div className="p-3 flex items-center justify-between">
-                    {!isSidebarCollapsed && (
-                        <motion.span
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="font-bold tracking-tight text-xl bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent"
-                        >
-                            RISKSURFACE
-                        </motion.span>
-                    )}
-                    <button
-                        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                        className="p-1.5 rounded-md hover:bg-white/5 transition-colors border border-border/50"
-                    >
-                        {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-                    </button>
-                </div>
-
-                <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto custom-scrollbar">
-                    {navItems.map((item) => {
-                        // Disable analysis tabs if no project selected
-                        const isDisabled = item.id !== 'projects' && !selectedProject;
-
-                        return (
-                            <button
-                                key={item.id}
-                                onClick={() => {
-                                    if (isDisabled) return;
-                                    if (activeTab === item.id) return;
-                                    setIsAnalysisReady(false);
-                                    setActiveTab(item.id);
-                                    setTimeout(() => setIsAnalysisReady(true), 400);
-                                }}
-                                disabled={isDisabled}
-                                className={cn(
-                                    "w-full flex items-center gap-3 px-3 py-1.5 rounded-xl transition-all relative group",
-                                    activeTab === item.id ? "bg-white/10 text-white" : "text-muted hover:text-white hover:bg-white/5",
-                                    isDisabled && "opacity-40 cursor-not-allowed"
-                                )}
-                            >
-                                <item.icon size={20} className={cn(activeTab === item.id ? "text-risk-high" : "text-muted group-hover:text-white")} />
-                                {!isSidebarCollapsed && (
-                                    <motion.span
-                                        initial={{ opacity: 0, x: -10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        className="font-bold tracking-tight text-sm"
-                                    >
-                                        {item.label}
-                                    </motion.span>
-                                )}
-                                {activeTab === item.id && (
-                                    <motion.div
-                                        layoutId="nav-active"
-                                        className="absolute left-0 w-1 h-6 bg-risk-high rounded-full"
-                                    />
-                                )}
-                            </button>
-                        );
-                    })}
-                </nav>
-
-                <div className="p-3 border-t border-border space-y-3">
-                    {/* GitHub Connection */}
-                    {!connection ? (
-                        // Not connected - Show Connect Button
-                        <button
-                            onClick={() => setShowConnectModal(true)}
-                            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-white/90 transition-all"
-                        >
-                            <Github size={20} />
-                            {!isSidebarCollapsed && <span>Connect GitHub</span>}
-                        </button>
-                    ) : (
-                        // Connected - Show User Info
-                        <>
-                            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
-                                <Github size={20} className="text-green-400" />
-                                {!isSidebarCollapsed && (
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-bold text-white truncate">{connection.username}</div>
-                                        {connection.organization && (
-                                            <div className="text-[10px] text-risk-high font-mono pt-0.5">{connection.organization}</div>
-                                        )}
-                                        <div className="text-[10px] text-muted">{projects.length} repos</div>
-                                    </div>
-                                )}
-                            </div>
-                            {/* Selected Project */}
-                            {currentProject && !isSidebarCollapsed && (
-                                <ScopeIndicator
-                                    organization={connection?.organization || currentProject.owner}
-                                    repository={currentProject.fullName}
-                                    accessLevel="full"
-                                    isExpanded={true}
-                                />
-                            )}
-
-                            {/* Settings */}
-                            <div className="relative">
-                                <button
-                                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                                    className={`w-full h-10 flex items-center gap-3 px-3 rounded-xl transition-all ${isSettingsOpen ? 'text-white bg-white/5' : 'text-muted hover:text-white hover:bg-white/5'}`}
-                                >
-                                    <Settings size={20} />
-                                    {!isSidebarCollapsed && <span className="text-sm font-bold">Settings</span>}
-                                </button>
-                                <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-                            </div>
-
-                            {/* Disconnect */}
-                            <button
-                                onClick={handleDisconnect}
-                                className="w-full h-10 flex items-center gap-3 px-3 rounded-xl text-muted hover:text-red-400 hover:bg-red-500/10 transition-all"
-                            >
-                                <LogOut size={20} />
-                                {!isSidebarCollapsed && <span className="text-sm font-bold">Disconnect</span>}
-                            </button>
-                        </>
-                    )}
-                </div>
+                <SidebarContent />
             </motion.aside>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col overflow-hidden relative">
-                {/* Top Header */}
-                <header className="h-16 border-b border-border flex items-center justify-between px-8 bg-surface/50 backdrop-blur-md shrink-0 z-50 relative">
-                    <div className="flex items-center gap-6">
-                        {(!connection && activeTab === 'projects') ? (
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2 px-3 py-1 rounded bg-yellow-500/10 border border-yellow-500/20">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-                                    <span className="text-[10px] font-black text-yellow-500/80 uppercase tracking-widest">Awaiting Feed</span>
-                                </div>
-                                <div className="h-4 w-px bg-white/10" />
-                                <span className="text-[9px] font-bold text-white/20 uppercase tracking-[0.4em]">Signal Status: Pending Connection</span>
-                            </div>
-                        ) : (
-                            <h2 className="text-sm font-bold text-white capitalize">
-                                {activeTab === 'projects' ? 'Projects' : currentProject?.name || 'Select a project'}
+            <main className="flex-1 flex flex-col min-w-0 relative">
+                <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-8 bg-surface/30 backdrop-blur-md shrink-0 z-40">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setIsMobileMenuOpen(true)}
+                            className="md:hidden p-2 -ml-2 rounded-lg hover:bg-white/5 transition-colors"
+                        >
+                            <LayoutDashboard size={24} className="text-risk-high" />
+                        </button>
+                        <div className="flex flex-col">
+                            <h2 className="text-sm font-black text-white uppercase tracking-widest hidden sm:block">
+                                {activeTab === 'projects' ? 'Fleet Management' : currentProject?.name || 'Selection'}
                             </h2>
-                        )}
-                        {currentProject && activeTab !== 'projects' && (
-                            <>
-                                <div className="h-4 w-px bg-border hidden sm:block" />
-                                <span className="text-xs text-muted">{currentProject.fullName}</span>
-                            </>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-4">
-                        {(!connection && activeTab === 'projects') ? (
-                            <div className="md:hidden">
+                            {currentProject && activeTab !== 'projects' && (
+                                <span className="text-[10px] text-muted font-mono truncate max-w-[150px] sm:max-w-none">
+                                    {currentProject.fullName}
+                                </span>
+                            )}
+                            {!connection && !showConnectModal && (
                                 <button
                                     onClick={() => setShowConnectModal(true)}
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-black text-xs font-bold"
+                                    className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black font-black text-[10px] uppercase tracking-tighter"
                                 >
-                                    <Github size={14} />
+                                    <Github size={12} />
                                     Connect
                                 </button>
-                            </div>
-                        ) : activeTab !== 'projects' && (
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {selectedProject && activeTab !== 'projects' && (
                             <div className="relative">
                                 <button
                                     onClick={() => setIsExportOpen(!isExportOpen)}
-                                    className={`text-xs font-black px-4 py-2 rounded-lg transition-all tracking-tight uppercase ${isExportOpen ? 'bg-[#e1e2e4] text-black' : 'bg-white text-black hover:bg-[#e1e2e4]'}`}
+                                    className={cn(
+                                        "text-[10px] font-black px-4 py-2 rounded-lg transition-all tracking-widest uppercase border",
+                                        isExportOpen ? "bg-white text-black border-white" : "bg-white/5 text-white border-white/10 hover:bg-white/10"
+                                    )}
                                 >
-                                    Export Report
+                                    Export Analysis
                                 </button>
                                 <ExportDropdown isOpen={isExportOpen} onClose={() => setIsExportOpen(false)} />
                             </div>
                         )}
+                        <button
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="p-2 rounded-lg hover:bg-white/5 transition-colors text-muted hover:text-white"
+                        >
+                            <Settings size={20} />
+                        </button>
+                        <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
                     </div>
                 </header>
 
+
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                     <AnimatePresence mode="wait">
                         {(isAnalysisReady || activeTab === 'projects') ? (
                             <motion.div
                                 key={activeTab + (selectedProject || '')}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
                                 transition={{ duration: 0.2 }}
                                 className={cn(
-                                    "max-w-[1600px] mx-auto w-full",
-                                    (connection || activeTab !== 'projects') ? "space-y-12 pb-32" : "h-full flex items-center"
+                                    "max-w-[1400px] mx-auto w-full",
+                                    (connection || activeTab !== 'projects') ? "space-y-8 md:space-y-12 pb-20" : "h-full flex items-center justify-center text-center"
                                 )}
                             >
                                 <ErrorBoundary key={`eb-${activeTab}-${projectVersion}`}>
@@ -467,41 +506,71 @@ export default function App() {
                                 </ErrorBoundary>
                             </motion.div>
                         ) : (
-                            <div className="max-w-[1600px] mx-auto space-y-12 pb-32">
-                                <SkeletonInstrument count={1} height={120} className="w-2/3" />
-                                <div className="grid grid-cols-3 gap-6">
-                                    <SkeletonInstrument count={1} height={180} />
-                                    <SkeletonInstrument count={1} height={180} />
-                                    <SkeletonInstrument count={1} height={180} />
+                            <div className="max-w-[1400px] mx-auto space-y-8 md:space-y-12 pb-20">
+                                <SkeletonInstrument count={1} height={120} className="rounded-2xl opacity-50" />
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <SkeletonInstrument count={1} height={180} className="rounded-2xl opacity-40" />
+                                    <SkeletonInstrument count={1} height={180} className="rounded-2xl opacity-40" />
+                                    <SkeletonInstrument count={1} height={180} className="rounded-2xl opacity-40" />
                                 </div>
                             </div>
                         )}
                     </AnimatePresence>
                 </div>
-            </main>
 
-            {/* Mobile Nav */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-border flex items-center justify-around px-4 z-50">
-                {navItems.slice(0, 4).map((item) => (
-                    <button
-                        key={item.id}
-                        onClick={() => {
-                            if (item.id !== 'projects' && !selectedProject) return;
-                            setActiveTab(item.id);
-                        }}
-                        className={cn(
-                            "flex flex-col items-center gap-1 px-3 py-2 transition-colors",
-                            activeTab === item.id ? "text-risk-high" : "text-muted"
-                        )}
+                {/* Mobile Tab Bar - Horizontally Scrollable */}
+                <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/80 backdrop-blur-xl border-t border-white/5 z-50 flex items-center px-4 overflow-hidden">
+                    <div
+                        id="mobile-nav-scroll"
+                        className="flex-1 flex items-center gap-6 overflow-x-auto no-scrollbar scroll-smooth pr-12"
                     >
-                        <item.icon size={20} />
-                        <span className="text-[10px] uppercase tracking-tighter font-bold">{item.label}</span>
+                        {navItems.map((item) => {
+                            const isActive = activeTab === item.id;
+                            const isDisabled = item.id !== 'projects' && !selectedProject;
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => {
+                                        if (!isDisabled) setActiveTab(item.id);
+                                    }}
+                                    className={cn(
+                                        "flex flex-col items-center gap-1 shrink-0 transition-all",
+                                        isActive ? "text-risk-high" : "text-muted",
+                                        isDisabled && "opacity-20"
+                                    )}
+                                >
+                                    <item.icon size={20} />
+                                    <span className="text-[9px] font-black uppercase tracking-tighter whitespace-nowrap">{item.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {/* Shadow/Arrow indicator */}
+                    <div className="absolute right-0 inset-y-0 w-16 bg-gradient-to-l from-surface to-transparent pointer-events-none flex items-center justify-end px-4">
+                        <motion.div
+                            animate={{ x: [0, 5, 0] }}
+                            transition={{ repeat: Infinity, duration: 2 }}
+                            className="bg-white/10 p-1.5 rounded-full"
+                        >
+                            <ChevronRight size={14} className="text-white/40" />
+                        </motion.div>
+                    </div>
+                    {/* Clickable arrow to scroll */}
+                    <button
+                        onClick={() => {
+                            document.getElementById('mobile-nav-scroll')?.scrollBy({ left: 150, behavior: 'smooth' });
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center z-10"
+                    >
+                        {/* Empty button overlaying the indicator for touch */}
                     </button>
-                ))}
-            </nav>
+                </div>
+            </main>
         </div>
     );
 }
+
+
 
 // ==================== HELPER COMPONENTS ====================
 

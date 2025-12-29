@@ -2713,26 +2713,12 @@ func loadState() {
 	stateLock.Lock()
 	defer stateLock.Unlock()
 
-	data, err := os.ReadFile(stateFile)
-	if err != nil {
-		state = AppState{
-			Analyses: make(map[string]*RepoAnalysis),
-		}
-		saveStateUnsafe()
-		return
+	// Always start with fresh state for production deployments
+	// Each user session should be independent
+	state = AppState{
+		Analyses: make(map[string]*RepoAnalysis),
 	}
-	json.Unmarshal(data, &state)
-	if state.Analyses == nil {
-		state.Analyses = make(map[string]*RepoAnalysis)
-	}
-
-	// Clear stale connection if no token available (token is in-memory only for security)
-	// Connection will persist only if GITHUB_TOKEN env is provided
-	if state.Connection != nil && os.Getenv("GITHUB_TOKEN") == "" {
-		log.Printf("[Startup] Clearing stale connection (token not available after restart)")
-		state.Connection = nil
-		saveStateUnsafe()
-	}
+	log.Printf("[Startup] Initialized with clean state")
 }
 
 func saveStateUnsafe() {

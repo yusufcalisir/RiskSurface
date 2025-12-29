@@ -123,12 +123,13 @@ export default function RealDependencies({ projectId }: Props) {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
-                        <GitBranch className="text-purple-400" size={20} />
-                        <h2 className="text-sm font-bold uppercase tracking-widest text-white/50">Structural Risk Engine</h2>
+                        <GitBranch className="text-purple-400" size={18} />
+                        <h2 className="text-[10px] md:text-sm font-black uppercase tracking-widest text-white/30">Structural Risk Engine</h2>
                     </div>
-                    <h1 className="text-4xl font-extrabold text-white tracking-tight">Dependencies & Risk Profiles</h1>
-                    <p className="text-white/40 mt-1 font-medium italic">Enriching dependency graph with real-time volatility and structural risk signals</p>
+                    <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">Dependencies</h1>
+                    <p className="text-[10px] md:text-sm text-white/40 mt-1 font-medium italic">Enriching dependency graph with real-time volatility signals</p>
                 </div>
+
             </div>
 
             {/* Summary Stats */}
@@ -175,37 +176,37 @@ export default function RealDependencies({ projectId }: Props) {
                                     className={`p-4 cursor-pointer hover:bg-white/5 transition-all relative ${riskStyle.bg}`}
                                     onClick={() => setSelectedNode(isExpanded ? null : node.id)}
                                 >
-                                    <div className="flex items-center justify-between relative z-10">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                         <div className="flex items-center gap-4">
-                                            <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center border ${riskStyle.border} ${riskStyle.bg}`}>
-                                                <span className={`text-base font-black ${riskStyle.text}`}>
+                                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center border shrink-0 ${riskStyle.border} ${riskStyle.bg}`}>
+                                                <span className={`text-sm md:text-base font-black ${riskStyle.text}`}>
                                                     {(node.riskAmplification || 0).toFixed(0)}
                                                 </span>
-                                                <span className="text-[7px] uppercase font-black opacity-40">Risk</span>
                                             </div>
-                                            <div>
-                                                <div className="font-bold text-white text-lg flex items-center gap-2">
+                                            <div className="min-w-0">
+                                                <div className="font-bold text-white text-base md:text-lg flex items-center gap-2 truncate">
                                                     {node.name}
-                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-md uppercase font-black tracking-tighter ${node.category === 'internal' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-md uppercase font-black tracking-tighter shrink-0 ${node.category === 'internal' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
                                                         {node.category}
                                                     </span>
                                                 </div>
-                                                <div className="text-[10px] text-white/20 font-mono tracking-tight font-medium group-hover:text-white/40 transition-colors uppercase">{node.id}</div>
+                                                <div className="text-[9px] md:text-[10px] text-white/20 font-mono font-medium group-hover:text-white/40 transition-colors uppercase truncate">{node.id}</div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-6">
-                                            <div className="hidden md:block text-right">
+                                        <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                                            <div className="text-left sm:text-right">
                                                 <div className="text-[9px] uppercase font-bold text-white/20 mb-0.5">Centrality</div>
                                                 <div className="text-sm font-black text-white/60">{((node.centrality || 0) * 100).toFixed(0)}%</div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-left sm:text-right">
                                                 <div className="text-[9px] uppercase font-bold text-white/20 mb-0.5">Structural</div>
                                                 <div className="text-sm font-black text-white/60">{node.fanIn + node.fanOut}</div>
                                             </div>
-                                            {isExpanded ? <ChevronUp size={18} className="text-white/20" /> : <ChevronDown size={18} className="text-white/20" />}
+                                            {isExpanded ? <ChevronUp size={18} className="text-white/20 shrink-0" /> : <ChevronDown size={18} className="text-white/20 shrink-0" />}
                                         </div>
                                     </div>
                                 </div>
+
 
                                 <AnimatePresence>
                                     {isExpanded && (
@@ -217,12 +218,13 @@ export default function RealDependencies({ projectId }: Props) {
                                         >
                                             <div className="p-6 space-y-6">
                                                 {/* Risk Detail Grid */}
-                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <DetailCard label="Dependency Type" value={node.category} icon={<GitBranch size={14} />} />
                                                     <DetailCard label="Declared Version" value={node.version || 'Unknown'} icon={<Code size={14} />} />
                                                     <DetailCard label="Version Health" value={node.lag} status={node.lag === 'up-to-date' ? 'success' : 'warning'} />
-                                                    <DetailCard label="Change Volatility" value={`${(node.volatility * 100).toFixed(1)}%`} status={node.volatility > 0.3 ? 'danger' : 'success'} />
+                                                    <DetailCard label="Volatility" value={`${(node.volatility * 100).toFixed(1)}%`} status={node.volatility > 0.3 ? 'danger' : 'success'} />
                                                 </div>
+
 
                                                 {/* Structural Trace */}
                                                 <div className="space-y-3">

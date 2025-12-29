@@ -197,23 +197,23 @@ export default function RealImpact({ projectId }: Props) {
                                 className="p-4 cursor-pointer hover:bg-white/5 transition-all"
                                 onClick={() => setExpandedUnit(isExpanded ? null : unit.name)}
                             >
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 rounded-xl ${severity.bg} flex items-center justify-center`}>
-                                            <span className={`text-lg font-black ${severity.text}`}>
+                                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl ${severity.bg} flex items-center justify-center shrink-0`}>
+                                            <span className={`text-base md:text-lg font-black ${severity.text}`}>
                                                 {unit.fragilityScore.toFixed(0)}
                                             </span>
                                         </div>
-                                        <div>
-                                            <div className="font-bold text-white flex items-center gap-2">
+                                        <div className="min-w-0">
+                                            <div className="font-bold text-sm md:text-base text-white flex items-center gap-2 truncate">
                                                 {unit.name}
                                                 {unit.isCyclic && (
-                                                    <span className="text-[9px] px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full uppercase font-black">
+                                                    <span className="text-[8px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded-full uppercase font-black shrink-0">
                                                         Cyclic
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="text-xs text-white/40 flex items-center gap-3">
+                                            <div className="text-[10px] text-white/40 flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
                                                 <span>{unit.fileCount} files</span>
                                                 <span className="capitalize">{unit.exposureScope}</span>
                                                 <span className="flex items-center gap-1">
@@ -223,21 +223,22 @@ export default function RealImpact({ projectId }: Props) {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="text-right">
-                                            <div className="text-[10px] uppercase font-bold text-white/30">Blast</div>
-                                            <div className="text-lg font-black text-white">{unit.blastRadius}</div>
+                                    <div className="flex items-center justify-between sm:justify-end gap-4 md:gap-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                                        <div className="text-left sm:text-right">
+                                            <div className="text-[9px] uppercase font-bold text-white/20">Blast</div>
+                                            <div className="text-base font-black text-white">{unit.blastRadius}</div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] uppercase font-bold text-white/30">Fan In/Out</div>
-                                            <div className="text-sm font-mono text-white/60">{unit.fanIn}/{unit.fanOut}</div>
+                                        <div className="text-left sm:text-right">
+                                            <div className="text-[9px] uppercase font-bold text-white/20">Fan In/Out</div>
+                                            <div className="text-xs font-mono text-white/40">{unit.fanIn}/{unit.fanOut}</div>
                                         </div>
-                                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${severity.bg} ${severity.text}`}>
+                                        <div className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase ${severity.bg} ${severity.text}`}>
                                             {severity.label}
                                         </div>
-                                        {isExpanded ? <ChevronUp size={16} className="text-white/40" /> : <ChevronDown size={16} className="text-white/40" />}
+                                        {isExpanded ? <ChevronUp size={16} className="text-white/40 shrink-0" /> : <ChevronDown size={16} className="text-white/40 shrink-0" />}
                                     </div>
                                 </div>
+
                             </div>
 
                             <AnimatePresence>

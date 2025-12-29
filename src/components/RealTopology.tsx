@@ -154,49 +154,51 @@ export default function RealTopology({ projectId }: Props) {
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div className="glass-panel rounded-2xl p-6">
-                <div className="flex items-center gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/20">
-                        <Map size={28} className="text-blue-400" />
+            <div className="glass-panel rounded-2xl p-4 md:p-6 border border-white/5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/20 shrink-0">
+                        <Map size={24} className="text-blue-400 md:hidden" />
+                        <Map size={28} className="text-blue-400 hidden md:block" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-white">System Topology</h1>
-                        <p className="text-muted text-sm">Derived from repository directory structure</p>
+                        <h1 className="text-lg md:text-2xl font-black text-white uppercase tracking-tight">System Topology</h1>
+                        <p className="text-muted text-[10px] md:text-sm">Derived from directory structure analysis</p>
                     </div>
                 </div>
-                <p className="text-xs text-muted bg-white/5 rounded-lg p-3 border border-white/10">
-                    This topology is computed from real repository structure. Modules represent top-level directories,
-                    clusters group modules by language, and metrics are deterministically calculated from file distribution.
+                <p className="text-[10px] md:text-xs text-white/40 bg-white/5 rounded-lg p-3 border border-white/10 leading-relaxed italic">
+                    Derived from real repository structure. Modules represent top-level directories,
+                    clusters group modules by language, and metrics are deterministically calculated.
                 </p>
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                 <MetricCard
                     label="Sub-Domains"
                     value={metrics.subDomainsTracked.toString()}
-                    description="Language-based clusters"
+                    description="Clustered"
                     color="blue"
                 />
                 <MetricCard
                     label="Risk Index"
                     value={(metrics.regionalRiskIndex || 0).toFixed(0)}
-                    description="Average cluster risk"
+                    description="Avg index"
                     color={(metrics.regionalRiskIndex || 0) >= 75 ? 'red' : (metrics.regionalRiskIndex || 0) >= 50 ? 'yellow' : 'green'}
                 />
                 <MetricCard
                     label="Entropy"
                     value={metrics.entropyDensity || 'Low'}
-                    description="File distribution variance"
+                    description="Distribution"
                     color={metrics.entropyDensity === 'High' ? 'red' : metrics.entropyDensity === 'Medium' ? 'yellow' : 'green'}
                 />
                 <MetricCard
-                    label="Cascading Debt"
+                    label="Debt Status"
                     value={metrics.cascadingDebtStatus || 'Stable'}
-                    description="Propagation potential"
+                    description="Propagation"
                     color={metrics.cascadingDebtStatus === 'Active' ? 'red' : metrics.cascadingDebtStatus === 'Neutral' ? 'yellow' : 'green'}
                 />
             </div>
+
 
             {/* Clusters */}
             <div className="glass-panel rounded-2xl p-6">

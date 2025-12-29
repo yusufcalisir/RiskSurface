@@ -73,31 +73,29 @@ const ActivityHeatMap: React.FC<ActivityHeatMapProps> = ({ activity, totalCommit
     }, [grid]);
 
     return (
-        <div className="w-full space-y-2">
-            <div className="flex items-start gap-4 overflow-x-auto pb-2 custom-scrollbar no-scrollbar min-h-[160px] px-2">
+        <div className="w-full space-y-4">
+            <div className="flex items-start gap-4 overflow-x-auto pb-4 custom-scrollbar no-scrollbar min-h-[140px] px-1 touch-pan-x">
                 {/* Y-AXIS: Vertical "DAYS" Label */}
-                <div className="flex flex-col justify-center h-[115px] pr-2 select-none border-r border-white/5">
-                    <div className="rotate-180 [writing-mode:vertical-lr] text-[8px] font-black uppercase tracking-[0.4em] text-white/20 py-2">
+                <div className="flex flex-col justify-center h-[105px] pr-1.5 select-none border-r border-white/5 shrink-0">
+                    <div className="rotate-180 [writing-mode:vertical-lr] text-[7px] md:text-[8px] font-black uppercase tracking-[0.3em] text-white/20 py-2">
                         Days
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 shrink-0">
                     {/* Grid */}
-                    <div className="flex gap-[4px]">
+                    <div className="flex gap-[3px] md:gap-[4px]">
                         {grid.map((week, weekIndex) => (
-                            <div key={weekIndex} className="flex flex-col gap-[4px]">
+                            <div key={weekIndex} className="flex flex-col gap-[3px] md:gap-[4px]">
                                 {week.days.map((day, dayIndex) => {
-                                    // Vertical: show below for first 3 rows
                                     const showBelow = dayIndex < 3;
-                                    // Horizontal: shift away from edges
                                     const isLeftEdge = weekIndex < 6;
                                     const isRightEdge = weekIndex > grid.length - 8;
 
                                     return (
                                         <div
                                             key={dayIndex}
-                                            className={`w-3 h-3 rounded-[2px] ${getColor(day.level)} transition-colors group relative`}
+                                            className={`w-2.5 h-2.5 md:w-3 md:h-3 rounded-[1px] md:rounded-[2px] ${getColor(day.level)} transition-colors group relative`}
                                         >
                                             {/* Tooltip */}
                                             <div
@@ -126,20 +124,16 @@ const ActivityHeatMap: React.FC<ActivityHeatMapProps> = ({ activity, totalCommit
                         {monthLabels.map((m, i) => (
                             <span
                                 key={i}
-                                className="absolute text-[8px] font-black uppercase tracking-[0.2em] text-white/20"
-                                style={{ left: `${m.index * 16}px` }} // 12px width + 4px gap = 16px per week
+                                className="absolute text-[7px] md:text-[8px] font-black uppercase tracking-[0.2em] text-white/20"
+                                style={{ left: `${m.index * (window.innerWidth < 768 ? 13 : 16)}px` }}
                             >
                                 {m.label}
                             </span>
                         ))}
                     </div>
-
-                    {/* Bottom X-AXIS Title */}
-                    <div className="flex justify-center pt-2">
-                        <span className="text-[8px] font-black uppercase tracking-[0.4em] text-white/10">Months</span>
-                    </div>
                 </div>
             </div>
+
 
             {/* Legend / Info Footer */}
             <div className="flex justify-between items-center text-[10px] text-muted font-bold px-2 pt-4 border-t border-white/5">

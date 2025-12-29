@@ -284,65 +284,74 @@ export default function RealDashboard({ projectId }: Props) {
     return (
         <div className="space-y-8">
             {/* Repository Header */}
-            <div className="glass-panel rounded-2xl p-6">
-                <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center border border-white/10">
-                            <GitBranch size={28} className="text-white" />
+            <div className="glass-panel rounded-2xl p-4 md:p-6 border border-white/5">
+                <div className="flex flex-col gap-6">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center border border-white/10 shrink-0 shadow-lg">
+                            <GitBranch size={24} className="text-white md:hidden" />
+                            <GitBranch size={28} className="text-white hidden md:block" />
                         </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-2xl font-bold text-white">{metadata?.fullName || repo.name}</h1>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h1 className="text-lg md:text-2xl font-black text-white truncate uppercase tracking-tight max-w-full">{metadata?.fullName || repo.name}</h1>
                                 <a
                                     href={repo.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-muted hover:text-white transition-colors"
+                                    className="text-muted hover:text-white transition-colors shrink-0 p-1 bg-white/5 rounded-md border border-white/10"
                                 >
-                                    <ExternalLink size={16} />
+                                    <ExternalLink size={14} />
                                 </a>
                             </div>
-                            <p className="text-muted text-sm mt-1">{metadata?.description || 'No description'}</p>
+                            <p className="text-muted text-[10px] md:text-sm mt-1 line-clamp-1 italic font-medium opacity-60">{metadata?.description || 'No description'}</p>
                         </div>
                     </div>
+
                     <button
                         onClick={handleRefresh}
                         disabled={refreshing}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium transition-colors"
+                        className="w-full flex md:hidden items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-white/5 active:scale-95"
                     >
-                        <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                        <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
                         Refresh Analysis
+                    </button>
+
+                    <button
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="hidden md:flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-black uppercase tracking-widest transition-all ml-auto"
+                    >
+                        <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                        Refresh
                     </button>
                 </div>
 
+
                 {/* GitHub Stats - Real Data */}
-                <div className="flex gap-6 mt-6 pt-6 border-t border-white/10">
+                <div className="flex flex-wrap gap-x-6 gap-y-3 mt-6 pt-6 border-t border-white/5">
                     <div className="flex items-center gap-2 text-muted">
-                        <Star size={16} />
-                        <span className="font-semibold text-white">{metadata?.stars || 0}</span>
-                        <span>stars</span>
+                        <Star size={14} />
+                        <span className="font-bold text-white text-xs">{metadata?.stars || 0}</span>
+                        <span className="text-[10px] uppercase font-bold text-white/40">stars</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted">
-                        <GitFork size={16} />
-                        <span className="font-semibold text-white">{metadata?.forks || 0}</span>
-                        <span>forks</span>
+                        <GitFork size={14} />
+                        <span className="font-bold text-white text-xs">{metadata?.forks || 0}</span>
+                        <span className="text-[10px] uppercase font-bold text-white/40">forks</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted">
-                        <FileCode size={16} />
-                        <span className="font-semibold text-white">{analysis?.fileCount || 0}</span>
-                        <span>files</span>
+                        <FileCode size={14} />
+                        <span className="font-bold text-white text-xs">{analysis?.fileCount || 0}</span>
+                        <span className="text-[10px] uppercase font-bold text-white/40">files</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted">
-                        <FolderTree size={16} />
-                        <span className="font-semibold text-white">{analysis?.directoryCount || 0}</span>
-                        <span>directories</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted">
-                        <Package size={16} />
-                        <span className="font-semibold text-white">{metadata?.language || 'Unknown'}</span>
+                        <FolderTree size={14} />
+                        <span className="font-bold text-white text-xs">{analysis?.directoryCount || 0}</span>
+                        <span className="text-[10px] uppercase font-bold text-white/40">dirs</span>
                     </div>
                 </div>
             </div>
+
 
             {/* Computed Scores - Deterministic from Real Data */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -401,10 +410,10 @@ export default function RealDashboard({ projectId }: Props) {
                     </div>
                 )}
 
-                <div className="flex justify-between items-center mt-6 pt-6 border-t border-white/5 text-[10px] text-white/20 font-mono uppercase tracking-widest">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-6 pt-6 border-t border-white/5 gap-4">
                     <div className="flex items-center gap-6">
                         <div>
-                            <div className="text-[10px] uppercase font-black text-white/30 tracking-widest leading-none mb-1">Volatility Index</div>
+                            <div className="text-[9px] uppercase font-black text-white/30 tracking-widest leading-none mb-1">Volatility Index</div>
                             <div className={`text-sm font-black italic ${analysis.volatility?.classification === 'Low' ? 'text-green-400' :
                                 analysis.volatility?.classification === 'Moderate' ? 'text-yellow-400' : 'text-risk-high'
                                 }`}>
@@ -412,9 +421,9 @@ export default function RealDashboard({ projectId }: Props) {
                             </div>
                         </div>
                         <div>
-                            <div className="text-[10px] uppercase font-black text-white/30 tracking-widest leading-none mb-1">Daily Baseline</div>
-                            <div className="text-sm font-bold text-white lowercase normal-case tracking-normal italic font-sans">
-                                {analysis.volatility?.baselineActivity.toFixed(1)} <span className="text-[10px] text-white/40 font-medium">avg commits/day</span>
+                            <div className="text-[9px] uppercase font-black text-white/30 tracking-widest leading-none mb-1">Daily Baseline</div>
+                            <div className="text-sm font-bold text-white lowercase normal-case tracking-normal italic font-sans leading-none">
+                                {analysis.volatility?.baselineActivity.toFixed(1)} <span className="text-[9px] text-white/40 font-medium">commits/day</span>
                             </div>
                         </div>
                     </div>
@@ -422,17 +431,18 @@ export default function RealDashboard({ projectId }: Props) {
                     {analysis.volatility?.burstPeriods && analysis.volatility.burstPeriods.length > 0 && (
                         <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-risk-high/10 border border-risk-high/20">
                             <Activity size={12} className="text-risk-high animate-pulse" />
-                            <span className="text-[10px] font-black text-risk-high uppercase tracking-tight">
-                                {analysis.volatility.burstPeriods.length} Activity Bursts Detected
+                            <span className="text-[9px] font-black text-risk-high uppercase tracking-tight">
+                                {analysis.volatility.burstPeriods.length} Bursts
                             </span>
                         </div>
                     )}
                 </div>
 
-                <div className="mt-4 text-[10px] text-white/40 italic font-sans text-center">
+                <div className="mt-4 text-[9px] text-white/40 italic font-medium font-sans text-center px-4">
                     {analysis.volatility?.interpretation}
                 </div>
             </div>
+
 
             {/* Documentation Drift Analysis - Embedded in Activity/Structure View */}
             {
@@ -951,16 +961,17 @@ function ScoreCard({
     };
 
     return (
-        <div className={`rounded-xl p-4 bg-gradient-to-br ${colors[color]} border`}>
+        <div className={`rounded-xl p-4 bg-gradient-to-br ${colors[color]} border shadow-xl`}>
             <div className="flex items-center gap-2 mb-2">
-                <Icon size={16} className={iconColors[color]} />
-                <span className="text-xs text-muted uppercase tracking-wider font-bold">{label}</span>
+                <Icon size={14} className={iconColors[color]} />
+                <span className="text-[10px] text-white/40 uppercase tracking-widest font-black shrink-0">{label}</span>
             </div>
             <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-bold text-white">{value}</span>
-                <span className="text-xs text-muted">/{maxValue}</span>
+                <span className="text-xl md:text-2xl font-black text-white tracking-tighter">{value}</span>
+                <span className="text-[10px] text-white/20 font-bold uppercase">{maxValue}</span>
             </div>
-            <div className="text-xs text-muted mt-1">{description}</div>
+            <div className="text-[10px] text-white/40 mt-1 font-medium truncate">{description}</div>
         </div>
+
     );
 }

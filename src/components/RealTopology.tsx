@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Map, AlertCircle, Box, GitBranch, TrendingUp, Activity, Loader2 } from 'lucide-react';
+import ProjectContextHeader from './ProjectContextHeader';
 
 import { API_BASE } from '../config';
 
@@ -111,16 +112,51 @@ export default function RealTopology({ projectId }: Props) {
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 gap-4">
-                <Loader2 size={48} className="text-muted animate-spin" />
-                <div className="text-muted">Analyzing repository structure...</div>
+            <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 animate-in fade-in duration-500">
+                {/* Folder tree structure animation */}
+                <div className="relative">
+                    {/* Animated folder structure */}
+                    <div className="flex flex-col gap-1">
+                        {/* Root */}
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 bg-teal-500 rounded-sm animate-pulse" />
+                            <div className="w-16 h-2 bg-white/20 rounded" />
+                        </div>
+                        {/* Children - staggered reveal */}
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className="flex items-center gap-2 ml-6" style={{ animation: `fadeSlideIn 1s ease-out infinite`, animationDelay: `${i * 300}ms` }}>
+                                <div className="w-px h-4 bg-teal-500/30" />
+                                <div className="w-3 h-3 bg-teal-400/50 rounded-sm" />
+                                <div className="h-2 bg-white/10 rounded" style={{ width: `${40 + i * 15}px` }} />
+                            </div>
+                        ))}
+                        {/* Grandchildren */}
+                        {[1, 2].map((i) => (
+                            <div key={`gc-${i}`} className="flex items-center gap-2 ml-12" style={{ animation: `fadeSlideIn 1s ease-out infinite`, animationDelay: `${(i + 3) * 300}ms` }}>
+                                <div className="w-px h-3 bg-teal-500/20" />
+                                <div className="w-2 h-2 bg-teal-300/30 rounded-sm" />
+                                <div className="h-1.5 bg-white/5 rounded" style={{ width: `${30 + i * 10}px` }} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <style>{`
+                    @keyframes fadeSlideIn {
+                        0%, 100% { opacity: 0.3; transform: translateX(-5px); }
+                        50% { opacity: 1; transform: translateX(0); }
+                    }
+                `}</style>
+                <div className="text-center space-y-2">
+                    <h3 className="text-lg font-black text-white uppercase tracking-widest">System Topology</h3>
+                    <p className="text-sm text-white/40 font-medium">Mapping directory structure...</p>
+                </div>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 gap-4">
+            <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-4">
                 <AlertCircle size={48} className="text-red-400" />
                 <div className="text-muted">{error}</div>
             </div>
@@ -129,7 +165,7 @@ export default function RealTopology({ projectId }: Props) {
 
     if (!topology || !topology.available) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 gap-4">
+            <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-4">
                 <Map size={48} className="text-muted" />
                 <div className="text-muted text-center">
                     <p className="font-bold">Topology Unavailable</p>
@@ -153,22 +189,19 @@ export default function RealTopology({ projectId }: Props) {
 
     return (
         <div className="space-y-8">
-            {/* Header */}
+            <ProjectContextHeader title="System Topology" projectId={projectId} />
+
+            {/* Inferred Context Description */}
             <div className="glass-panel rounded-2xl p-4 md:p-6 border border-white/5">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+                <div className="flex items-center gap-4">
                     <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/20 shrink-0">
-                        <Map size={24} className="text-blue-400 md:hidden" />
-                        <Map size={28} className="text-blue-400 hidden md:block" />
+                        <Map size={24} className="text-blue-400" />
                     </div>
-                    <div>
-                        <h1 className="text-lg md:text-2xl font-black text-white uppercase tracking-tight">System Topology</h1>
-                        <p className="text-muted text-[10px] md:text-sm">Derived from directory structure analysis</p>
-                    </div>
+                    <p className="text-[10px] md:text-sm text-white/40 leading-relaxed italic">
+                        Derived from real repository structure. Modules represent top-level directories,
+                        clusters group modules by language, and metrics are deterministically calculated.
+                    </p>
                 </div>
-                <p className="text-[10px] md:text-xs text-white/40 bg-white/5 rounded-lg p-3 border border-white/10 leading-relaxed italic">
-                    Derived from real repository structure. Modules represent top-level directories,
-                    clusters group modules by language, and metrics are deterministically calculated.
-                </p>
             </div>
 
             {/* Metrics Grid */}
@@ -249,7 +282,7 @@ export default function RealTopology({ projectId }: Props) {
                     Detected Modules
                     <span className="text-xs font-normal text-muted">({modules.length} top-level directories)</span>
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                     {modules.slice(0, 16).map((mod, i) => (
                         <motion.div
                             key={mod.id}
@@ -330,10 +363,10 @@ function MetricCard({
     };
 
     return (
-        <div className={`rounded-xl p-4 bg-gradient-to-br ${colors[color]} border`}>
-            <div className="text-xs text-muted uppercase tracking-wider font-bold mb-2">{label}</div>
-            <div className="text-2xl font-bold text-white">{value}</div>
-            <div className="text-xs text-muted mt-1">{description}</div>
+        <div className={`rounded-xl p-4 bg-gradient-to-br ${colors[color]} border min-w-0`}>
+            <div className="text-[10px] text-muted uppercase tracking-wider font-bold mb-2 truncate">{label}</div>
+            <div className="text-xl md:text-2xl font-black text-white truncate">{value}</div>
+            <div className="text-[10px] text-muted mt-1 truncate">{description}</div>
         </div>
     );
 }

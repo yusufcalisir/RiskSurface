@@ -9,6 +9,7 @@ import {
     ArrowUpRight,
     Search
 } from 'lucide-react';
+import ProjectContextHeader from './ProjectContextHeader';
 
 import { API_BASE } from '../config';
 
@@ -53,7 +54,8 @@ export default function RealTemporal({ projectId }: Props) {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API_BASE}/api/projects/selected`);
+            // PAGE-SPECIFIC ENDPOINT: Fetches only temporal-relevant data
+            const res = await fetch(`${API_BASE}/api/analysis/temporal`);
             const json = await res.json();
 
             // CRITICAL: Validate project context matches expected
@@ -86,15 +88,16 @@ export default function RealTemporal({ projectId }: Props) {
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-700">
-            {/* Header */}
+            <ProjectContextHeader title="Temporal Hotspots" projectId={projectId} />
+
+            {/* Header / Filter Toolbar */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
                         <Clock className="text-risk-medium" size={20} />
                         <h2 className="text-sm font-bold uppercase tracking-widest text-white/50">Stability Analysis</h2>
                     </div>
-                    <h1 className="text-4xl font-extrabold text-white tracking-tight">Temporal Hotspots</h1>
-                    <p className="text-white/40 mt-1 font-medium">Tracking instability and change compression across time</p>
+                    <p className="text-white/40 mt-1 font-medium italic">Tracking instability and change compression across time</p>
                 </div>
 
                 <div className="relative group">
@@ -104,7 +107,7 @@ export default function RealTemporal({ projectId }: Props) {
                         placeholder="Filter hotspots..."
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-white/20 transition-all w-64"
+                        className="bg-white/5 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-white/20 transition-all w-full md:w-64"
                     />
                 </div>
             </div>
@@ -154,30 +157,39 @@ export default function RealTemporal({ projectId }: Props) {
                                             {hotspot.severityScore.toFixed(0)}
                                         </div>
                                     </div>
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-3 mb-1">
-                                            <h3 className="text-lg font-bold text-white font-mono truncate">{hotspot.path}</h3>
-                                            <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${hotspot.classification === 'burst' ? 'bg-risk-high/20 text-risk-high' : 'bg-risk-medium/20 text-risk-medium'}`}>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1 min-w-0">
+                                            <h3 className="text-sm md:text-lg font-bold text-white font-mono truncate">{hotspot.path}</h3>
+                                            <span className={`w-fit text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${hotspot.classification === 'burst' ? 'bg-risk-high/20 text-risk-high' : 'bg-risk-medium/20 text-risk-medium'}`}>
                                                 {hotspot.classification}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-4 text-xs font-medium">
-                                            <span className="text-white/40">Baseline Multiplier: <span className="text-white/60">{(hotspot.commitCount / data.medianFrequency).toFixed(1)}x</span></span>
+                                        <div className="flex flex-wrap items-center gap-3 md:gap-4 text-[10px] md:text-xs font-medium">
+                                            <span className="text-white/40">Baseline: <span className="text-white/60">{(hotspot.commitCount / data.medianFrequency).toFixed(1)}x</span></span>
                                             <span className="text-white/40">MTBC: <span className="text-white/60">{hotspot.meanIntervalHr.toFixed(1)}h</span></span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-12 text-right">
-                                    <div>
-                                        <div className="text-[10px] uppercase font-bold text-white/30 tracking-widest mb-1">Shortest Interval</div>
-                                        <div className="text-xl font-black text-white">{hotspot.shortestIntervalHr < 1 ? 'Sub-hour' : `${hotspot.shortestIntervalHr.toFixed(1)}h`}</div>
+                                <div className="flex items-center justify-between md:justify-end gap-6 sm:gap-12 text-right w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0 border-white/5">
+                                    <div className="sm:w-24 shrink-0">
+                                        <div className="text-[10px] uppercase font-bold text-white/30 tracking-widest mb-1">Interval</div>
+                                        <div className="text-lg sm:text-xl font-black text-white">{hotspot.shortestIntervalHr < 1 ? 'Sub-h' : `${hotspot.shortestIntervalHr.toFixed(1)}h`}</div>
                                     </div>
-                                    <div>
-                                        <div className="text-[10px] uppercase font-bold text-white/30 tracking-widest mb-1">Total Changes</div>
-                                        <div className="text-xl font-black text-white">{hotspot.commitCount}</div>
+                                    <div className="sm:w-20 shrink-0">
+                                        <div className="text-[10px] uppercase font-bold text-white/30 tracking-widest mb-1">Changes</div>
+                                        <div className="text-lg sm:text-xl font-black text-white">{hotspot.commitCount}</div>
                                     </div>
-                                    <ArrowUpRight className="text-white/10 group-hover:text-white/30 transition-colors" size={20} />
+                                    <a
+                                        href={`https://github.com/${projectId}/blob/main/${hotspot.path}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="p-2 sm:p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all group/link shrink-0"
+                                        title="View on GitHub"
+                                    >
+                                        <ArrowUpRight className="text-white/30 group-hover/link:text-white transition-colors" size={18} />
+                                    </a>
                                 </div>
                             </div>
 
@@ -222,11 +234,38 @@ export default function RealTemporal({ projectId }: Props) {
 
 function LoadingState() {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6">
-            <Loader2 className="text-risk-medium animate-spin" size={40} />
-            <div className="text-center">
-                <div className="text-white font-black uppercase tracking-widest text-sm mb-1">Extracting Timestamps</div>
-                <div className="text-white/20 text-[10px] uppercase font-bold">Computing Change Density</div>
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 animate-in fade-in duration-500">
+            {/* Timeline scanning animation */}
+            <div className="relative">
+                {/* Timeline bars */}
+                <div className="flex gap-1">
+                    {[...Array(12)].map((_, i) => (
+                        <div
+                            key={i}
+                            className="w-1.5 rounded-full bg-white/10"
+                            style={{
+                                height: `${20 + Math.random() * 40}px`,
+                                animation: 'pulse 1s ease-in-out infinite',
+                                animationDelay: `${i * 100}ms`
+                            }}
+                        />
+                    ))}
+                </div>
+                {/* Scanning line */}
+                <div
+                    className="absolute top-0 w-0.5 h-full bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.8)]"
+                    style={{ animation: 'scanLine 2s ease-in-out infinite' }}
+                />
+            </div>
+            <style>{`
+                @keyframes scanLine {
+                    0%, 100% { left: 0; }
+                    50% { left: calc(100% - 2px); }
+                }
+            `}</style>
+            <div className="text-center space-y-2">
+                <h3 className="text-lg font-black text-white uppercase tracking-widest">Temporal Hotspots</h3>
+                <p className="text-sm text-white/40 font-medium">Scanning commit timeline...</p>
             </div>
         </div>
     );
@@ -234,7 +273,7 @@ function LoadingState() {
 
 function UnavailableState({ reason }: { reason?: string }) {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6 px-12">
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 px-12">
             <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
                 <AlertCircle size={40} className="text-white/10" />
             </div>

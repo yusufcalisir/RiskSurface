@@ -55,6 +55,10 @@ type GitHubCommit struct {
 			Date  time.Time `json:"date"`
 		} `json:"author"`
 	} `json:"commit"`
+	// GitHub user account associated with this commit (if linked)
+	Author *struct {
+		Login string `json:"login"`
+	} `json:"author,omitempty"`
 }
 
 type GitHubContributor struct {
@@ -2142,11 +2146,81 @@ func analyzeBusFactor(client *GitHubClient, owner, repo string, deps *Dependency
 		limit = 25 // Stay safe with rate limits
 	}
 
+	// ============================================================
+	// IDENTITY RESOLUTION: Correlate username + email + name
+	// Priority: GitHub login > email > name
+	// Goal: Same person = ONE contributor identity
+	// ============================================================
+
+	// Maps for identity correlation
+	emailToLogin := make(map[string]string)        // email → GitHub login
+	identityDisplayName := make(map[string]string) // canonical ID → display name
+
+	// First pass: Build correlation map
+	for i := 0; i < limit; i++ {
+		email := strings.ToLower(strings.TrimSpace(commits[i].Commit.Author.Email))
+		name := strings.TrimSpace(commits[i].Commit.Author.Name)
+		var login string
+		if commits[i].Author != nil && commits[i].Author.Login != "" {
+			login = strings.ToLower(commits[i].Author.Login)
+		}
+
+		// Link email to GitHub login if available
+		if email != "" && login != "" {
+			emailToLogin[email] = login
+		}
+
+		// Determine canonical ID (prefer login, fallback to email)
+		var canonicalID string
+		if login != "" {
+			canonicalID = login
+		} else if email != "" {
+			// Check if this email has a known login
+			if knownLogin, exists := emailToLogin[email]; exists {
+				canonicalID = knownLogin
+			} else {
+				canonicalID = email
+			}
+		} else {
+			continue // Skip commits we cannot identify
+		}
+
+		// Store best display name (prefer: login > longer name > email)
+		if existingName, exists := identityDisplayName[canonicalID]; !exists {
+			if login != "" {
+				identityDisplayName[canonicalID] = login
+			} else if name != "" {
+				identityDisplayName[canonicalID] = name
+			} else {
+				identityDisplayName[canonicalID] = canonicalID
+			}
+		} else if name != "" && len(name) > len(existingName) && login == "" {
+			// Keep longer name if we don't have a login
+			identityDisplayName[canonicalID] = name
+		}
+	}
+
+	// Second pass: Collect file authorship with resolved identities
 	for i := 0; i < limit; i++ {
 		sha := commits[i].SHA
-		author := commits[i].Commit.Author.Name
-		if author == "" {
-			author = commits[i].Commit.Author.Email
+		email := strings.ToLower(strings.TrimSpace(commits[i].Commit.Author.Email))
+		var login string
+		if commits[i].Author != nil && commits[i].Author.Login != "" {
+			login = strings.ToLower(commits[i].Author.Login)
+		}
+
+		// Resolve to canonical ID
+		var canonicalID string
+		if login != "" {
+			canonicalID = login
+		} else if email != "" {
+			if knownLogin, exists := emailToLogin[email]; exists {
+				canonicalID = knownLogin
+			} else {
+				canonicalID = email
+			}
+		} else {
+			continue
 		}
 
 		files, err := client.GetCommitFiles(owner, repo, sha)
@@ -2158,8 +2232,8 @@ func analyzeBusFactor(client *GitHubClient, owner, repo string, deps *Dependency
 			if _, exists := fileAuthorCounts[file]; !exists {
 				fileAuthorCounts[file] = make(map[string]int)
 			}
-			fileAuthorCounts[file][author]++
-			authorTotalFiles[author]++
+			fileAuthorCounts[file][canonicalID]++ // Use canonical ID
+			authorTotalFiles[canonicalID]++
 		}
 	}
 
@@ -2173,14 +2247,20 @@ func analyzeBusFactor(client *GitHubClient, owner, repo string, deps *Dependency
 	for path, authors := range fileAuthorCounts {
 		totalCommits := 0
 		maxCommits := 0
-		topAuthor := ""
+		topAuthorEmail := ""
 
-		for author, count := range authors {
+		for authorEmail, count := range authors {
 			totalCommits += count
 			if count > maxCommits {
 				maxCommits = count
-				topAuthor = author
+				topAuthorEmail = authorEmail
 			}
+		}
+
+		// Get display name for the top author
+		topAuthorDisplay := identityDisplayName[topAuthorEmail]
+		if topAuthorDisplay == "" {
+			topAuthorDisplay = topAuthorEmail
 		}
 
 		ownershipPercent := (float64(maxCommits) / float64(totalCommits)) * 100
@@ -2205,7 +2285,7 @@ func analyzeBusFactor(client *GitHubClient, owner, repo string, deps *Dependency
 
 		ownerships = append(ownerships, FileOwnership{
 			Path:                path,
-			TopContributor:      topAuthor,
+			TopContributor:      topAuthorDisplay, // Use display name for UI
 			OwnershipPercentage: ownershipPercent,
 			CommitDistribution:  authors,
 			EntropyScore:        entropy,
@@ -2213,15 +2293,15 @@ func analyzeBusFactor(client *GitHubClient, owner, repo string, deps *Dependency
 			RiskSignal:          riskSignal,
 		})
 
-		// Update contributor surface
-		if _, exists := contributorStats[topAuthor]; !exists {
-			contributorStats[topAuthor] = &ContributorSurface{Name: topAuthor, KnowledgeSilos: []string{}}
+		// Update contributor surface using email as canonical key
+		if _, exists := contributorStats[topAuthorEmail]; !exists {
+			contributorStats[topAuthorEmail] = &ContributorSurface{Name: topAuthorDisplay, KnowledgeSilos: []string{}}
 		}
 		if isCritical {
-			contributorStats[topAuthor].CriticalFilesCount++
+			contributorStats[topAuthorEmail].CriticalFilesCount++
 		}
 		if riskSignal == "silo" {
-			contributorStats[topAuthor].KnowledgeSilos = append(contributorStats[topAuthor].KnowledgeSilos, path)
+			contributorStats[topAuthorEmail].KnowledgeSilos = append(contributorStats[topAuthorEmail].KnowledgeSilos, path)
 		}
 	}
 
@@ -2937,8 +3017,12 @@ func analyzeProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// LIGHTWEIGHT INITIAL LOAD: Only set selection and fetch basic metadata
+	// Deep analyses are loaded on-demand per page navigation
 	client := NewGitHubClient(githubToken)
-	analysis, err := analyzeRepository(client, owner, repo, foundRepo.DefaultBranch)
+
+	// Fetch only shallow metadata (fast)
+	repoData, err := client.GetRepository(owner, repo)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(500)
@@ -2946,12 +3030,41 @@ func analyzeProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch shallow tree for file count (fast)
+	branch := foundRepo.DefaultBranch
+	if branch == "" {
+		branch = "main"
+	}
+	tree, _ := client.GetFileTree(owner, repo, branch)
+	fileCount := 0
+	dirCount := 0
+	if tree != nil {
+		for _, node := range tree.Tree {
+			if node.Type == "blob" {
+				fileCount++
+			} else if node.Type == "tree" {
+				dirCount++
+			}
+		}
+	}
+
+	// Create minimal metadata response
+	metadata := map[string]interface{}{
+		"stars":          repoData.StargazersCount,
+		"forks":          repoData.ForksCount,
+		"fileCount":      fileCount,
+		"directoryCount": dirCount,
+		"description":    repoData.Description,
+		"language":       repoData.Language,
+		"defaultBranch":  repoData.DefaultBranch,
+		"fullName":       repoData.FullName,
+	}
+
 	stateLock.Lock()
-	state.Analyses[fullName] = analysis
 	state.SelectedProject = fullName
 	for i := range state.DiscoveredRepos {
 		if state.DiscoveredRepos[i].FullName == fullName {
-			state.DiscoveredRepos[i].AnalysisState = "ready"
+			state.DiscoveredRepos[i].AnalysisState = "selected"
 			break
 		}
 	}
@@ -2959,11 +3072,10 @@ func analyzeProject(w http.ResponseWriter, r *http.Request) {
 	stateLock.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":  true,
 		"project":  foundRepo,
-		"analysis": analysis,
+		"metadata": metadata,
 	})
 }
 
@@ -3121,6 +3233,352 @@ func getSelectedProject(w http.ResponseWriter, _ *http.Request) {
 		"selected": true,
 		"project":  foundRepo,
 		"analysis": analysis,
+	})
+}
+
+// ==================== PAGE-SPECIFIC ANALYSIS ENDPOINTS ====================
+// These endpoints compute analysis on-demand for each page navigation
+// Per the Page-Scoped Data Loading mandate, each page fetches only what it needs
+
+func getSelectedProjectContext() (string, string, string, *DiscoveredRepo, error) {
+	stateLock.RLock()
+	selected := state.SelectedProject
+	var foundRepo *DiscoveredRepo
+	for i := range state.DiscoveredRepos {
+		if state.DiscoveredRepos[i].FullName == selected {
+			foundRepo = &state.DiscoveredRepos[i]
+			break
+		}
+	}
+	stateLock.RUnlock()
+
+	if selected == "" || foundRepo == nil {
+		return "", "", "", nil, fmt.Errorf("no project selected")
+	}
+
+	parts := strings.Split(selected, "/")
+	if len(parts) != 2 {
+		return "", "", "", nil, fmt.Errorf("invalid project name")
+	}
+
+	return parts[0], parts[1], foundRepo.DefaultBranch, foundRepo, nil
+}
+
+func analysisDashboard(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	owner, repo, branch, foundRepo, err := getSelectedProjectContext()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[Dashboard] Computing dashboard analysis for %s/%s", owner, repo)
+	client := NewGitHubClient(githubToken)
+
+	// Dashboard needs: repo metadata, commits, activity heatmap, basic file stats
+	repoData, _ := client.GetRepository(owner, repo)
+	commits, _ := client.GetCommits(owner, repo, 100)
+	activity, _ := client.GetCommitActivity(owner, repo)
+	tree, _ := client.GetFileTree(owner, repo, branch)
+	contributors, _ := client.GetContributors(owner, repo)
+
+	// Basic file stats
+	fileCount := 0
+	dirCount := 0
+	filesByExt := make(map[string]int)
+	topDirs := make(map[string]int)
+	if tree != nil {
+		for _, node := range tree.Tree {
+			if node.Type == "blob" {
+				fileCount++
+				ext := ""
+				if idx := strings.LastIndex(node.Path, "."); idx != -1 {
+					ext = node.Path[idx:]
+				}
+				filesByExt[ext]++
+				parts := strings.Split(node.Path, "/")
+				if len(parts) > 1 {
+					topDirs[parts[0]]++
+				}
+			} else if node.Type == "tree" {
+				dirCount++
+			}
+		}
+	}
+
+	// Commit timeline
+	now := time.Now()
+	thirtyDaysAgo := now.AddDate(0, 0, -30)
+	commitsLast30 := 0
+	var recentCommits []CommitSummary
+	for i, c := range commits {
+		if c.Commit.Author.Date.After(thirtyDaysAgo) {
+			commitsLast30++
+		}
+		if i < 10 {
+			message := c.Commit.Message
+			if len(message) > 80 {
+				message = message[:80] + "..."
+			}
+			recentCommits = append(recentCommits, CommitSummary{
+				SHA:     c.SHA[:7],
+				Message: message,
+				Author:  c.Commit.Author.Name,
+				Date:    c.Commit.Author.Date,
+			})
+		}
+	}
+
+	// Scores
+	activityScore := float64(commitsLast30) / 10.0
+	if activityScore > 10 {
+		activityScore = 10
+	}
+	daysSincePush := 0
+	if repoData != nil {
+		daysSincePush = int(now.Sub(repoData.PushedAt).Hours() / 24)
+	}
+	stalenessScore := float64(daysSincePush) / 30.0
+	teamRiskScore := 1.0
+	if len(contributors) > 0 {
+		teamRiskScore = 1.0 / float64(len(contributors))
+	}
+
+	// Additional dashboard analyses (light versions)
+	docDrift := analyzeDocDrift(client, owner, repo)
+	structuralDepth := analyzeStructuralDepth(tree.Tree)
+	testSurface := analyzeTestSurface(tree.Tree, nil)
+	volatility := analyzeActivityVolatility(commits)
+	securityAnalysis := analyzeSecurityConsistency(client, owner, repo, tree.Tree, nil)
+
+	analysis := &RepoAnalysis{
+		FetchedAt:         now,
+		TotalCommits:      len(commits),
+		CommitsLast30Days: commitsLast30,
+		ContributorCount:  len(contributors),
+		FileCount:         fileCount,
+		DirectoryCount:    dirCount,
+		FilesByExtension:  filesByExt,
+		CommitActivity:    activity,
+		RecentCommits:     recentCommits,
+		ActivityScore:     activityScore,
+		StalenessScore:    stalenessScore,
+		TeamRiskScore:     teamRiskScore,
+		DocDrift:          docDrift,
+		StructuralDepth:   structuralDepth,
+		TestSurface:       testSurface,
+		Volatility:        volatility,
+		SecurityAnalysis:  securityAnalysis,
+	}
+	if repoData != nil {
+		analysis.DaysSinceLastPush = daysSincePush
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"selected": true,
+		"project":  foundRepo,
+		"analysis": analysis,
+	})
+}
+
+func analysisTrajectory(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	owner, repo, _, foundRepo, err := getSelectedProjectContext()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[Trajectory] Computing trajectory analysis for %s/%s", owner, repo)
+	client := NewGitHubClient(githubToken)
+	trajectory := analyzeTrajectory(client, owner, repo)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"selected": true,
+		"project":  foundRepo,
+		"analysis": map[string]interface{}{
+			"trajectory": trajectory,
+		},
+	})
+}
+
+func analysisDependencies(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	owner, repo, branch, foundRepo, err := getSelectedProjectContext()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[Dependencies] Computing dependency analysis for %s/%s", owner, repo)
+	client := NewGitHubClient(githubToken)
+	tree, _ := client.GetFileTree(owner, repo, branch)
+	deps := analyzeDependencies(client, owner, repo, tree, nil)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"selected": true,
+		"project":  foundRepo,
+		"analysis": map[string]interface{}{
+			"deps": deps,
+		},
+	})
+}
+
+func analysisConcentration(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	owner, repo, branch, foundRepo, err := getSelectedProjectContext()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[Concentration] Computing concentration analysis for %s/%s", owner, repo)
+	client := NewGitHubClient(githubToken)
+
+	// Fetch tree for dependency analysis (needed for bus factor)
+	tree, _ := client.GetFileTree(owner, repo, branch)
+
+	// Compute concentration
+	concentration := analyzeConcentration(client, owner, repo)
+
+	// Compute dependencies (needed for bus factor context)
+	deps := analyzeDependencies(client, owner, repo, tree, concentration)
+
+	// Compute bus factor and embed into concentration
+	busFactor := analyzeBusFactor(client, owner, repo, deps, concentration)
+	if concentration != nil {
+		concentration.OwnershipRisk = busFactor
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"selected": true,
+		"project":  foundRepo,
+		"analysis": map[string]interface{}{
+			"concentration": concentration,
+		},
+	})
+}
+
+func analysisTemporal(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	owner, repo, _, foundRepo, err := getSelectedProjectContext()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[Temporal] Computing temporal analysis for %s/%s", owner, repo)
+	client := NewGitHubClient(githubToken)
+	temporal := analyzeTemporal(client, owner, repo)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"selected": true,
+		"project":  foundRepo,
+		"analysis": map[string]interface{}{
+			"temporal": temporal,
+		},
+	})
+}
+
+func analysisImpact(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	owner, repo, branch, foundRepo, err := getSelectedProjectContext()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[Impact] Computing impact analysis for %s/%s", owner, repo)
+	client := NewGitHubClient(githubToken)
+	tree, _ := client.GetFileTree(owner, repo, branch)
+	topology := analyzeTopology(tree)
+	impact := analyzeImpact(topology, tree)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"selected": true,
+		"project":  foundRepo,
+		"analysis": map[string]interface{}{
+			"impact": impact,
+		},
+	})
+}
+
+func analysisBusFactor(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	owner, repo, branch, foundRepo, err := getSelectedProjectContext()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[BusFactor] Computing bus factor analysis for %s/%s", owner, repo)
+	client := NewGitHubClient(githubToken)
+	tree, _ := client.GetFileTree(owner, repo, branch)
+	concentration := analyzeConcentration(client, owner, repo)
+	deps := analyzeDependencies(client, owner, repo, tree, concentration)
+	busFactor := analyzeBusFactor(client, owner, repo, deps, concentration)
+
+	// Include concentration with ownership risk for frontend
+	if concentration != nil {
+		concentration.OwnershipRisk = busFactor
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"selected": true,
+		"project":  foundRepo,
+		"analysis": map[string]interface{}{
+			"concentration": concentration,
+			"busFactor":     busFactor,
+		},
 	})
 }
 
@@ -3824,6 +4282,13 @@ func main() {
 
 	// Analysis
 	http.HandleFunc("/api/analysis/refresh", corsMiddleware(refreshAnalysis))
+	http.HandleFunc("/api/analysis/dashboard", corsMiddleware(analysisDashboard))
+	http.HandleFunc("/api/analysis/trajectory", corsMiddleware(analysisTrajectory))
+	http.HandleFunc("/api/analysis/dependencies", corsMiddleware(analysisDependencies))
+	http.HandleFunc("/api/analysis/concentration", corsMiddleware(analysisConcentration))
+	http.HandleFunc("/api/analysis/temporal", corsMiddleware(analysisTemporal))
+	http.HandleFunc("/api/analysis/impact", corsMiddleware(analysisImpact))
+	http.HandleFunc("/api/analysis/busfactor", corsMiddleware(analysisBusFactor))
 
 	// Health check endpoint for cron jobs (lightweight, no DB load)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

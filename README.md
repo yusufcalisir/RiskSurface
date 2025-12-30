@@ -62,27 +62,37 @@ Detect high intensity zones where code is changing too fast to remain stable. Th
 
 ---
 
+---
+
 ## 🏛️ THE BLUEPRINT | INTERNAL SYSTEMS MAPPING
 
 ### ⚔️ FRONTEND STACK | REACT PRECISION
-The interface delivers a premium glassmorphic experience spanning every single pixel.
-* `src/App.tsx` : The central nervous system.
-* `src/config.ts` : The external API gateway.
-* `src/components/RealDashboard.tsx` : Tactical overview.
-* `src/components/RealTopology.tsx` : Architectural map.
-* `src/components/RealTrajectory.tsx` : System timeline.
-* `src/components/RealImpact.tsx` : Risk surface area.
-* `src/components/RealDependencies.tsx` : dependency web.
-* `src/components/RealConcentration.tsx` : Resource drain radar.
-* `src/components/RealTemporal.tsx` : Technical debt clock.
+The interface delivers a premium glassmorphic experience spanning every single pixel, now fully responsive.
+* `src/App.tsx` : The central orchestrator with integrated routing.
+* `src/components/ProjectContextHeader.tsx` : Unified project identity across all views.
+* `src/components/RealDashboard.tsx` : Tactical overview with live health metrics.
+* `src/components/RealTopology.tsx` : Architectural entropy and module mapping.
+* `src/components/RealTrajectory.tsx` : Stability velocity and risk direction.
+* `src/components/RealImpact.tsx` : Dependency-weighted blast radius analysis.
+* `src/components/RealDependencies.tsx` : Real-time manifest import extraction.
+* `src/components/RealConcentration.tsx` : Bus factor and ownership risk index.
+* `src/components/RealTemporal.tsx` : High-velocity commit hotspot detection.
+* `src/components/ConnectionPage.tsx` : Centralized repository analysis portal.
+* `src/components/GitHubConnectModal.tsx` : Secure OAuth/PAT credential gateway.
 
 ### ⚙️ BACKEND CORE | GO PERFORMANCE
-Our backend is a high performance engine designed for speed plus extreme reliability.
-* `server/main.go` : Master analyzer plus API orchestrator.
-* `server/go.mod` : dependency management layer.
-* `server/state.json` : Encrypted local vault for intelligence data.
+Our backend is a high performance engine designed for real-time analysis of multi-GB repositories.
+* `server/main.go` : The core analyzer engine with parallel AST parsing.
+* `server/state.json` : Persistent vault for repository metadata and analysis cycles.
+* **REST API** : Unified endpoints for `/api/analysis/*` delivering granular architectural signals.
 
 ---
+
+## 📱 VISUAL INTEGRITY | RESPONSIVE FIRST
+RiskSurface is engineered for tactical deployment on any device.
+* **Mobile-Optimized Layouts**: Bespoke CSS architecture ensuring zero overflow on narrow viewports.
+* **Intelligent Truncation**: Precision font scaling and truncation for deep file systems.
+* **Touch-Ready Controls**: High-fidelity interactions optimized for mobile and desktop parity.
 
 ## 🛠️ THE WAR ROOM SETUP | INSTALLATION PROTOCOL
 

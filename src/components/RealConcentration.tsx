@@ -11,6 +11,7 @@ import {
     Users,
     ShieldAlert
 } from 'lucide-react';
+import ProjectContextHeader from './ProjectContextHeader';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -82,7 +83,8 @@ export default function RealConcentration({ projectId }: Props) {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API_BASE}/api/projects/selected`);
+            // PAGE-SPECIFIC ENDPOINT: Fetches only concentration-relevant data
+            const res = await fetch(`${API_BASE}/api/analysis/concentration`);
             const json = await res.json();
 
             // CRITICAL: Validate project context matches expected
@@ -111,15 +113,16 @@ export default function RealConcentration({ projectId }: Props) {
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-700">
-            {/* Header */}
+            <ProjectContextHeader title="Change Concentration" projectId={projectId} />
+
+            {/* Header / Sub-Context */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
                         <Activity className="text-risk-high" size={20} />
                         <h2 className="text-sm font-bold uppercase tracking-widest text-white/50">Structural Hotspots</h2>
                     </div>
-                    <h1 className="text-4xl font-extrabold text-white tracking-tight">Change Concentration</h1>
-                    <p className="text-white/40 mt-1 font-medium">Derived from real commit diffs across {data.window}</p>
+                    <p className="text-white/40 mt-1 font-medium italic">Derived from real commit diffs across {data.window}</p>
                 </div>
             </div>
 
@@ -219,18 +222,22 @@ export default function RealConcentration({ projectId }: Props) {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-8 pl-4">
+                                    <div className="flex items-center gap-4 md:gap-8 pl-4">
                                         {ownership && (
-                                            <div className="text-right hidden md:block">
+                                            <div className="text-right hidden md:block sm:w-32 shrink-0">
                                                 <div className="text-[10px] font-black text-white/30 uppercase">Primary Owner</div>
-                                                <div className="text-xs font-bold text-white max-w-[120px] truncate">{ownership.topContributor}</div>
+                                                <div className="text-xs font-bold text-white truncate">{ownership.topContributor}</div>
                                             </div>
                                         )}
-                                        <div className="text-right">
-                                            <div className="text-xs font-bold text-white">{file.commitCount} Commits</div>
-                                            <div className="text-[10px] text-white/30 uppercase font-black">{file.percent.toFixed(1)}% weight</div>
+                                        <div className="text-right sm:w-20 shrink-0">
+                                            <div className="text-xs font-bold text-white">{file.commitCount}</div>
+                                            <div className="text-[10px] text-white/30 uppercase font-black">Commits</div>
                                         </div>
-                                        <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden hidden sm:block">
+                                        <div className="text-right sm:w-24 shrink-0">
+                                            <div className="text-xs font-bold text-white">{file.percent.toFixed(1)}%</div>
+                                            <div className="text-[10px] text-white/30 uppercase font-black">Weight</div>
+                                        </div>
+                                        <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden hidden xl:block shrink-0">
                                             <motion.div
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${file.percent}%` }}
@@ -308,11 +315,40 @@ export default function RealConcentration({ projectId }: Props) {
 
 function LoadingState() {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6">
-            <Loader2 className="text-risk-high animate-spin" size={40} />
-            <div className="text-center">
-                <div className="text-white font-black uppercase tracking-widest text-sm mb-1">Analyzing Commits</div>
-                <div className="text-white/20 text-[10px] uppercase font-bold">Extracting Churn Distribution</div>
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 animate-in fade-in duration-500">
+            {/* Pie chart filling animation */}
+            <div className="relative w-20 h-20">
+                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                    <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
+                    <circle
+                        cx="18" cy="18" r="16" fill="none"
+                        stroke="url(#concentrationGradient)"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeDasharray="100"
+                        style={{ animation: 'fillCircle 2s ease-in-out infinite' }}
+                    />
+                    <defs>
+                        <linearGradient id="concentrationGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#ef4444" />
+                            <stop offset="100%" stopColor="#f97316" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.6)]" />
+                </div>
+            </div>
+            <style>{`
+                @keyframes fillCircle {
+                    0% { stroke-dashoffset: 100; }
+                    50% { stroke-dashoffset: 20; }
+                    100% { stroke-dashoffset: 100; }
+                }
+            `}</style>
+            <div className="text-center space-y-2">
+                <h3 className="text-lg font-black text-white uppercase tracking-widest">Concentration</h3>
+                <p className="text-sm text-white/40 font-medium">Measuring ownership distribution...</p>
             </div>
         </div>
     );
@@ -320,7 +356,7 @@ function LoadingState() {
 
 function UnavailableState({ reason }: { reason?: string }) {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6 px-12">
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 px-12">
             <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
                 <AlertCircle size={40} className="text-white/10" />
             </div>

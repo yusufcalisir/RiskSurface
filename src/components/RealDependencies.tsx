@@ -10,6 +10,7 @@ import {
     ArrowRight,
     Code
 } from 'lucide-react';
+import ProjectContextHeader from './ProjectContextHeader';
 
 import { API_BASE } from '../config';
 
@@ -68,7 +69,8 @@ export default function RealDependencies({ projectId }: Props) {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API_BASE}/api/projects/selected`);
+            // PAGE-SPECIFIC ENDPOINT: Fetches only dependency-relevant data
+            const res = await fetch(`${API_BASE}/api/analysis/dependencies`);
             const data = await res.json();
 
             // CRITICAL: Validate project context matches expected
@@ -119,26 +121,34 @@ export default function RealDependencies({ projectId }: Props) {
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-700">
-            {/* Header */}
+            <ProjectContextHeader title="System Dependencies" projectId={projectId} />
+
+            {/* Header / Engine Context */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
                         <GitBranch className="text-purple-400" size={18} />
                         <h2 className="text-[10px] md:text-sm font-black uppercase tracking-widest text-white/30">Structural Risk Engine</h2>
                     </div>
-                    <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">Dependencies</h1>
                     <p className="text-[10px] md:text-sm text-white/40 mt-1 font-medium italic">Enriching dependency graph with real-time volatility signals</p>
                 </div>
 
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="Total Nodes" value={deps.totalNodes} color="purple" />
-                <StatCard label="Internal Edges" value={deps.totalEdges} color="blue" />
-                <StatCard label="Avg Centrality" value={0.12} color="orange" isPercent />
-                <StatCard label="Cyclic Links" value={deps.cyclicNodes} color="red" />
-            </div>
+            {(() => {
+                const avgCentrality = deps.nodes.length > 0
+                    ? Number((deps.nodes.reduce((acc, n) => acc + (n.centrality || 0), 0) / deps.nodes.length).toFixed(3))
+                    : 0;
+                return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <StatCard label="Total Nodes" value={deps.totalNodes} color="purple" />
+                        <StatCard label="Internal Edges" value={deps.totalEdges} color="blue" />
+                        <StatCard label="Avg Centrality" value={avgCentrality} color="orange" isPercent />
+                        <StatCard label="Cyclic Links" value={deps.cyclicNodes} color="red" />
+                    </div>
+                );
+            })()}
 
             {/* Graph Visualization */}
             <div className="glass-panel rounded-2xl p-6 border border-white/10">
@@ -184,25 +194,29 @@ export default function RealDependencies({ projectId }: Props) {
                                                 </span>
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="font-bold text-white text-base md:text-lg flex items-center gap-2 truncate">
+                                                <div className="font-bold text-white text-base md:text-lg truncate">
                                                     {node.name}
-                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-md uppercase font-black tracking-tighter shrink-0 ${node.category === 'internal' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
-                                                        {node.category}
-                                                    </span>
                                                 </div>
                                                 <div className="text-[9px] md:text-[10px] text-white/20 font-mono font-medium group-hover:text-white/40 transition-colors uppercase truncate">{node.id}</div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5">
-                                            <div className="text-left sm:text-right">
+                                        <div className="flex items-center justify-between sm:justify-end gap-4 md:gap-8 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                                            <div className="sm:w-20 shrink-0 flex justify-end">
+                                                <span className={`text-[8px] px-1.5 py-0.5 rounded-md uppercase font-black tracking-tighter shrink-0 ${node.category === 'internal' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                                                    {node.category}
+                                                </span>
+                                            </div>
+                                            <div className="text-left sm:text-right sm:w-16 shrink-0">
                                                 <div className="text-[9px] uppercase font-bold text-white/20 mb-0.5">Centrality</div>
                                                 <div className="text-sm font-black text-white/60">{((node.centrality || 0) * 100).toFixed(0)}%</div>
                                             </div>
-                                            <div className="text-left sm:text-right">
+                                            <div className="text-left sm:text-right sm:w-16 shrink-0">
                                                 <div className="text-[9px] uppercase font-bold text-white/20 mb-0.5">Structural</div>
                                                 <div className="text-sm font-black text-white/60">{node.fanIn + node.fanOut}</div>
                                             </div>
-                                            {isExpanded ? <ChevronUp size={18} className="text-white/20 shrink-0" /> : <ChevronDown size={18} className="text-white/20 shrink-0" />}
+                                            <div className="w-6 flex justify-end">
+                                                {isExpanded ? <ChevronUp size={18} className="text-white/20 shrink-0" /> : <ChevronDown size={18} className="text-white/20 shrink-0" />}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -217,12 +231,33 @@ export default function RealDependencies({ projectId }: Props) {
                                             className="border-t border-white/5 bg-black/40 overflow-hidden"
                                         >
                                             <div className="p-6 space-y-6">
-                                                {/* Risk Detail Grid */}
+                                                {/* Risk Detail Grid - Only show metrics with real computed values */}
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                    {/* Always show Dependency Type - always computed */}
                                                     <DetailCard label="Dependency Type" value={node.category} icon={<GitBranch size={14} />} />
-                                                    <DetailCard label="Declared Version" value={node.version || 'Unknown'} icon={<Code size={14} />} />
-                                                    <DetailCard label="Version Health" value={node.lag} status={node.lag === 'up-to-date' ? 'success' : 'warning'} />
-                                                    <DetailCard label="Volatility" value={`${(node.volatility * 100).toFixed(1)}%`} status={node.volatility > 0.3 ? 'danger' : 'success'} />
+
+                                                    {/* Only show Declared Version if it exists in manifest */}
+                                                    {node.version && (
+                                                        <DetailCard label="Declared Version" value={node.version} icon={<Code size={14} />} />
+                                                    )}
+
+                                                    {/* Only show Version Health for external deps with computed lag */}
+                                                    {node.category === 'external' && node.lag && node.lag !== 'unknown' && node.lag !== 'n/a' && (
+                                                        <DetailCard
+                                                            label="Version Health"
+                                                            value={node.lag === 'up-to-date' ? 'Up to Date' : node.lag === 'major-lag' ? 'Major Lag' : 'Minor Lag'}
+                                                            status={node.lag === 'up-to-date' ? 'success' : node.lag === 'major-lag' ? 'danger' : 'warning'}
+                                                        />
+                                                    )}
+
+                                                    {/* Only show Volatility if file was in churn hotspots (non-zero) */}
+                                                    {node.volatility > 0 && (
+                                                        <DetailCard
+                                                            label="Volatility"
+                                                            value={`${(node.volatility * 100).toFixed(1)}%`}
+                                                            status={node.volatility > 0.3 ? 'danger' : 'success'}
+                                                        />
+                                                    )}
                                                 </div>
 
 
@@ -303,25 +338,53 @@ function StatCard({ label, value, color, isPercent }: { label: string; value: nu
     };
 
     return (
-        <div className={`rounded-2xl p-4 bg-gradient-to-br ${colors[color]} border`}>
-            <div className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1">{label}</div>
-            <div className="text-3xl font-black text-white">{value}</div>
+        <div className={`rounded-2xl p-4 bg-gradient-to-br ${colors[color]} border shrink-0 min-w-0`}>
+            <div className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 truncate">{label}</div>
+            <div className="text-2xl md:text-3xl font-black text-white truncate">
+                {isPercent ? `${(value * 100).toFixed(1)}%` : value}
+            </div>
         </div>
     );
 }
 
 function LoadingState() {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6">
-            <div className="relative">
-                <div className="w-16 h-16 rounded-full border-t-2 border-purple-500 animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <GitBranch size={20} className="text-purple-500" />
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 animate-in fade-in duration-500">
+            {/* Node graph animation */}
+            <div className="relative w-24 h-24">
+                {/* Center node */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-blue-500 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)]" />
+                {/* Orbiting nodes */}
+                {[0, 1, 2, 3].map((i) => (
+                    <div
+                        key={i}
+                        className="absolute w-3 h-3 bg-cyan-400 rounded-full"
+                        style={{
+                            animation: `orbit 3s linear infinite`,
+                            animationDelay: `${i * 0.75}s`,
+                            top: '50%',
+                            left: '50%',
+                            transformOrigin: '0 0'
+                        }}
+                    />
+                ))}
+                {/* Connection lines */}
+                <div className="absolute inset-0 animate-spin" style={{ animationDuration: '8s' }}>
+                    <div className="absolute top-0 left-1/2 w-px h-1/2 bg-gradient-to-b from-blue-500/0 to-blue-500/50" />
+                    <div className="absolute bottom-0 left-1/2 w-px h-1/2 bg-gradient-to-t from-blue-500/0 to-blue-500/50" />
+                    <div className="absolute top-1/2 left-0 w-1/2 h-px bg-gradient-to-r from-blue-500/0 to-blue-500/50" />
+                    <div className="absolute top-1/2 right-0 w-1/2 h-px bg-gradient-to-l from-blue-500/0 to-blue-500/50" />
                 </div>
             </div>
-            <div className="text-center">
-                <div className="text-white font-black uppercase tracking-widest text-sm mb-1">Parsing</div>
-                <div className="text-white/20 text-[10px] uppercase font-bold">Extracting Import Statements</div>
+            <style>{`
+                @keyframes orbit {
+                    0% { transform: rotate(0deg) translateX(40px) rotate(0deg); }
+                    100% { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
+                }
+            `}</style>
+            <div className="text-center space-y-2">
+                <h3 className="text-lg font-black text-white uppercase tracking-widest">Dependencies</h3>
+                <p className="text-sm text-white/40 font-medium">Tracing module connections...</p>
             </div>
         </div>
     );
@@ -329,7 +392,7 @@ function LoadingState() {
 
 function UnavailableState({ reason }: { reason?: string }) {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6 px-12">
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 px-12">
             <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
                 <AlertCircle size={40} className="text-white/10" />
             </div>

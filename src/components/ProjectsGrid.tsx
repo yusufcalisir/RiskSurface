@@ -73,9 +73,9 @@ export default function ProjectsGrid({
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-xl font-bold text-white">Your Projects</h2>
-                    <p className="text-sm text-muted mt-1">
+                <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-bold text-white">Your Projects</h2>
+                    <p className="text-[11px] sm:text-sm text-muted mt-1 truncate">
                         {projects.length} repositories discovered • Click to analyze
                     </p>
                 </div>
@@ -104,29 +104,29 @@ export default function ProjectsGrid({
                         >
                             {/* Top Row */}
                             <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
                                     {project.private ? (
-                                        <Lock size={14} className="text-yellow-400" />
+                                        <Lock size={14} className="text-yellow-400 shrink-0" />
                                     ) : (
-                                        <Globe size={14} className="text-muted" />
+                                        <Globe size={14} className="text-muted shrink-0" />
                                     )}
-                                    <span className="text-xs text-muted">{project.owner}</span>
+                                    <span className="text-[10px] md:text-xs text-muted truncate">{project.owner}</span>
                                 </div>
                                 {isAnalyzed && (
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400">
-                                        ANALYZED
+                                    <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400">
+                                        READY
                                     </span>
                                 )}
                                 {isAnalyzing && (
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 flex items-center gap-1">
+                                    <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 flex items-center gap-1">
                                         <Loader2 size={10} className="animate-spin" />
-                                        ANALYZING
+                                        SYNC
                                     </span>
                                 )}
                             </div>
 
                             {/* Name */}
-                            <h3 className="font-bold text-white text-lg truncate mb-1">
+                            <h3 className="font-bold text-white text-base sm:text-lg truncate mb-1">
                                 {project.name}
                             </h3>
 

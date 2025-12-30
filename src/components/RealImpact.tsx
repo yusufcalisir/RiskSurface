@@ -14,6 +14,7 @@ import {
     Layers,
     FileCode
 } from 'lucide-react';
+import ProjectContextHeader from './ProjectContextHeader';
 
 import { API_BASE } from '../config';
 
@@ -64,7 +65,8 @@ export default function RealImpact({ projectId }: Props) {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API_BASE}/api/projects/selected`);
+            // PAGE-SPECIFIC ENDPOINT: Fetches only impact-relevant data
+            const res = await fetch(`${API_BASE}/api/analysis/impact`);
             const data = await res.json();
 
             // CRITICAL: Validate project context matches expected
@@ -106,14 +108,15 @@ export default function RealImpact({ projectId }: Props) {
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-700">
-            {/* Header */}
+            <ProjectContextHeader title="Impact Surface" projectId={projectId} />
+
+            {/* Header / Context */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
                         <Target className="text-orange-400" size={20} />
                         <h2 className="text-sm font-bold uppercase tracking-widest text-white/50">Structural Fragility</h2>
                     </div>
-                    <h1 className="text-4xl font-extrabold text-white tracking-tight">Impact Surface</h1>
                 </div>
             </div>
 
@@ -197,8 +200,8 @@ export default function RealImpact({ projectId }: Props) {
                                 className="p-4 cursor-pointer hover:bg-white/5 transition-all"
                                 onClick={() => setExpandedUnit(isExpanded ? null : unit.name)}
                             >
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
+                                    <div className="flex items-center gap-4 flex-1 min-w-0">
                                         <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl ${severity.bg} flex items-center justify-center shrink-0`}>
                                             <span className={`text-base md:text-lg font-black ${severity.text}`}>
                                                 {unit.fragilityScore.toFixed(0)}
@@ -223,17 +226,19 @@ export default function RealImpact({ projectId }: Props) {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between sm:justify-end gap-4 md:gap-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5">
-                                        <div className="text-left sm:text-right">
+                                    <div className="flex items-center justify-between sm:justify-end gap-4 md:gap-8 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                                        <div className="text-left sm:text-right sm:w-16 shrink-0">
                                             <div className="text-[9px] uppercase font-bold text-white/20">Blast</div>
                                             <div className="text-base font-black text-white">{unit.blastRadius}</div>
                                         </div>
-                                        <div className="text-left sm:text-right">
+                                        <div className="text-left sm:text-right sm:w-20 shrink-0">
                                             <div className="text-[9px] uppercase font-bold text-white/20">Fan In/Out</div>
                                             <div className="text-xs font-mono text-white/40">{unit.fanIn}/{unit.fanOut}</div>
                                         </div>
-                                        <div className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase ${severity.bg} ${severity.text}`}>
-                                            {severity.label}
+                                        <div className="sm:w-24 shrink-0 flex justify-end">
+                                            <div className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase whitespace-nowrap ${severity.bg} ${severity.text}`}>
+                                                {severity.label}
+                                            </div>
                                         </div>
                                         {isExpanded ? <ChevronUp size={16} className="text-white/40 shrink-0" /> : <ChevronDown size={16} className="text-white/40 shrink-0" />}
                                     </div>
@@ -309,16 +314,32 @@ function StatCard({ label, value, color, icon: Icon, description }: {
 
 function LoadingState() {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6">
-            <div className="relative">
-                <div className="w-16 h-16 rounded-full border-t-2 border-orange-500 animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <Target size={20} className="text-orange-500" />
-                </div>
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 animate-in fade-in duration-500">
+            {/* Blast radius / ripple animation */}
+            <div className="relative w-24 h-24 flex items-center justify-center">
+                {/* Expanding rings */}
+                {[1, 2, 3].map((i) => (
+                    <div
+                        key={i}
+                        className="absolute rounded-full border-2 border-orange-500/50"
+                        style={{
+                            animation: 'ripple 2s ease-out infinite',
+                            animationDelay: `${(i - 1) * 0.5}s`
+                        }}
+                    />
+                ))}
+                {/* Center core */}
+                <div className="w-4 h-4 bg-orange-500 rounded-full shadow-[0_0_20px_rgba(249,115,22,0.8)] z-10" />
             </div>
-            <div className="text-center">
-                <div className="text-white font-black uppercase tracking-widest text-sm mb-1">Computing</div>
-                <div className="text-white/20 text-[10px] uppercase font-bold">Analyzing Impact Propagation</div>
+            <style>{`
+                @keyframes ripple {
+                    0% { width: 16px; height: 16px; opacity: 1; }
+                    100% { width: 96px; height: 96px; opacity: 0; }
+                }
+            `}</style>
+            <div className="text-center space-y-2">
+                <h3 className="text-lg font-black text-white uppercase tracking-widest">Impact Surface</h3>
+                <p className="text-sm text-white/40 font-medium">Calculating blast radius...</p>
             </div>
         </div>
     );
@@ -326,7 +347,7 @@ function LoadingState() {
 
 function UnavailableState({ reason }: { reason?: string }) {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6 px-12">
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 px-12">
             <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
                 <AlertCircle size={40} className="text-white/10" />
             </div>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard,
     Map,
@@ -9,12 +10,11 @@ import {
     Clock,
     ChevronLeft,
     ChevronRight,
-    Settings,
+
     Github,
     LogOut,
     FolderKanban,
-    Loader2,
-    Download
+    Loader2
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,10 +29,8 @@ import ImpactSurface from './components/ImpactSurface';
 import DependencyGraph from './components/DependencyGraph';
 import { AnalysisStatus } from './components/SignalBadge';
 import MetricCluster from './components/MetricCluster';
-import SnapshotNavigator from './components/SnapshotNavigator';
 import ScopeIndicator from './components/ScopeIndicator';
-import SettingsPanel from './components/SettingsPanel';
-import ExportDropdown from './components/ExportDropdown';
+
 import RealDashboard from './components/RealDashboard';
 import GitHubConnectModal from './components/GitHubConnectModal';
 import ProjectsGrid from './components/ProjectsGrid';
@@ -75,7 +73,7 @@ interface DiscoveredRepo {
 
 const navItems = [
     { id: 'projects', label: 'Projects', icon: FolderKanban },
-    { id: 'overview', label: 'Analysis', icon: LayoutDashboard },
+    { id: 'analysis', label: 'Analysis', icon: LayoutDashboard },
     { id: 'risk-map', label: 'System Topology', icon: Map },
     { id: 'history', label: 'Risk Trajectory', icon: History },
     { id: 'impact', label: 'Impact Surface', icon: Files },
@@ -86,6 +84,12 @@ const navItems = [
 
 export default function App() {
     console.log('[DEBUG] App component rendering...')
+
+    // Router hooks
+    const navigate = useNavigate();
+    const location = useLocation();
+    const contentRef = useRef<HTMLDivElement>(null);
+
     // Connection state
     const [connection, setConnection] = useState<GitHubConnection | null>(null);
     const [isCheckingConnection, setIsCheckingConnection] = useState(true);
@@ -93,8 +97,17 @@ export default function App() {
 
     // Projects state
     const [projects, setProjects] = useState<DiscoveredRepo[]>([]);
-    const [selectedProject, setSelectedProject] = useState<string | null>(null);
+    const [selectedProject, setSelectedProject] = useState<string | null>(() => {
+        // Restore from sessionStorage on mount
+        return sessionStorage.getItem('selectedProject') || null;
+    });
     const [analyzingProject, setAnalyzingProject] = useState<string | null>(null);
+
+    // Cached analyzed projects in session
+    const [analyzedProjects, setAnalyzedProjects] = useState<Set<string>>(() => {
+        const saved = sessionStorage.getItem('analyzedProjects');
+        return saved ? new Set(JSON.parse(saved)) : new Set();
+    });
 
     // Project isolation: version counter increments on every project switch
     // This forces all child components to refetch their data
@@ -105,9 +118,69 @@ export default function App() {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isAnalysisReady, setIsAnalysisReady] = useState(true);
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [isExportOpen, setIsExportOpen] = useState(false);
-    const [isMobileNavAtEnd, setIsMobileNavAtEnd] = useState(false);
+
+    // Scroll reset on navigation (Tab or Project change)
+    useEffect(() => {
+        if (contentRef.current) {
+            contentRef.current.scrollTop = 0;
+        }
+    }, [activeTab, selectedProject]);
+
+    // URL parsing on initial load
+    useEffect(() => {
+        const path = location.pathname;
+        if (path === '/' || path === '/projects') {
+            setActiveTab('projects');
+        } else {
+            // Parse /{owner}/{repo}/{tab} format (e.g., /yusufcalisir/RiskSurface/overview)
+            const parts = path.split('/').filter(Boolean);
+            if (parts.length >= 3) {
+                // owner/repo/tab format
+                const projectName = `${parts[0]}/${parts[1]}`;
+                const tab = parts[2];
+                if (projectName && navItems.find(n => n.id === tab)) {
+                    setSelectedProject(projectName);
+                    setActiveTab(tab);
+                }
+            } else if (parts.length === 1) {
+                // Just a tab name without project
+                const tab = parts[0];
+                if (navItems.find(n => n.id === tab)) {
+                    setActiveTab(tab);
+                }
+            }
+        }
+    }, []); // Only on mount
+
+    // Sync URL when activeTab or selectedProject changes
+    useEffect(() => {
+        if (activeTab === 'projects') {
+            if (location.pathname !== '/projects') {
+                navigate('/projects', { replace: true });
+            }
+        } else if (selectedProject && activeTab !== 'projects') {
+            // Use direct path without encoding: /owner/repo/tab
+            const expectedPath = `/${selectedProject}/${activeTab}`;
+            if (location.pathname !== expectedPath) {
+                navigate(expectedPath, { replace: true });
+            }
+        }
+    }, [activeTab, selectedProject]);
+
+    // Persist selectedProject to sessionStorage
+    useEffect(() => {
+        if (selectedProject) {
+            sessionStorage.setItem('selectedProject', selectedProject);
+        } else {
+            sessionStorage.removeItem('selectedProject');
+        }
+    }, [selectedProject]);
+
+    // Persist analyzedProjects to sessionStorage
+    useEffect(() => {
+        sessionStorage.setItem('analyzedProjects', JSON.stringify([...analyzedProjects]));
+    }, [analyzedProjects]);
+
 
     // Check GitHub connection on mount
     useEffect(() => {
@@ -149,12 +222,17 @@ export default function App() {
     const handleLogout = async () => {
         try {
             await fetch(`${API_BASE}/api/github/disconnect`, { method: 'POST' });
+            // Clear all session state
+            sessionStorage.removeItem('selectedProject');
+            sessionStorage.removeItem('analyzedProjects');
+            setAnalyzedProjects(new Set());
             setConnection(null);
             setProjects([]);
             setSelectedProject(null);
             setAnalyzingProject(null);
             setActiveTab('projects');
             setIsMobileMenuOpen(false);
+            navigate('/projects');
         } catch (err) {
             console.error('Logout failed');
         }
@@ -193,9 +271,11 @@ export default function App() {
         setAnalyzingProject(fullName);
         setSelectedProject(fullName);
 
-        // Check if project is already analyzed
+        // Check if project is already analyzed (either from backend state or session cache)
         const project = projects.find(p => p.fullName === fullName);
-        if (project?.analysisState === 'ready') {
+        const isAnalyzed = project?.analysisState === 'ready' || analyzedProjects.has(fullName);
+
+        if (isAnalyzed) {
             try {
                 await fetch(`${API_BASE}/api/projects/selected`, {
                     method: 'POST',
@@ -203,10 +283,10 @@ export default function App() {
                     headers: { 'Content-Type': 'application/json' }
                 });
                 await fetchProjects();
-                setActiveTab('overview');
+                setActiveTab('analysis');
             } catch (err) {
                 console.error('Failed to select project on backend', err);
-                setActiveTab('overview');
+                setActiveTab('analysis');
             }
             setAnalyzingProject(null);
             setIsAnalysisReady(true);
@@ -221,8 +301,10 @@ export default function App() {
             const data = await res.json();
 
             if (data.success) {
+                // Mark project as analyzed in session
+                setAnalyzedProjects(prev => new Set([...prev, fullName]));
                 await fetchProjects();
-                setActiveTab('overview');
+                setActiveTab('analysis');
             }
         } catch (err) {
             console.error('Failed to analyze project');
@@ -233,15 +315,13 @@ export default function App() {
 
     // Loading state
     if (isCheckingConnection) {
-        return (
-            <div className="flex h-screen w-screen items-center justify-center bg-background">
-                <Loader2 className="w-8 h-8 text-risk-high animate-spin" />
-            </div>
-        );
+        return <TacticalLoader />;
     }
 
     // Get selected project details
     const currentProject = projects.find(p => p.fullName === selectedProject);
+
+    // Sidebar Content Logic...
 
     const SidebarContent = () => (
         <>
@@ -312,6 +392,7 @@ export default function App() {
             </nav>
 
             <div className="p-4 border-t border-white/5 space-y-4 bg-surface/20">
+
                 {!connection ? (
                     <button
                         onClick={() => {
@@ -349,20 +430,10 @@ export default function App() {
                             />
                         )}
 
-                        <div className={cn(
-                            "grid gap-2",
-                            isSidebarCollapsed ? "md:grid-cols-1" : "grid-cols-2"
-                        )}>
-                            <button
-                                onClick={() => setIsSettingsOpen(true)}
-                                className="flex items-center justify-center h-10 rounded-xl bg-white/5 border border-white/5 text-muted hover:text-white hover:bg-white/10 transition-all"
-                                title="Settings"
-                            >
-                                <Settings size={18} />
-                            </button>
+                        <div>
                             <button
                                 onClick={handleDisconnect}
-                                className="flex items-center justify-center h-10 rounded-xl bg-red-500/10 border border-red-500/10 text-muted hover:text-red-400 hover:bg-red-500/20 transition-all"
+                                className="flex items-center justify-center h-10 w-full rounded-xl bg-red-500/10 border border-red-500/10 text-muted hover:text-red-400 hover:bg-red-500/20 transition-all"
                                 title="Disconnect"
                             >
                                 <LogOut size={18} />
@@ -385,6 +456,7 @@ export default function App() {
                     />
                 )}
             </AnimatePresence>
+
 
             {/* Sidebar Mobile Overlay */}
             <AnimatePresence>
@@ -423,15 +495,20 @@ export default function App() {
             <main className="flex-1 flex flex-col min-w-0 relative">
                 <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-8 bg-surface/30 backdrop-blur-md shrink-0 z-40">
                     <div className="flex items-center gap-3">
-                        <div className="flex flex-col">
-                            <h2 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">
-                                {activeTab === 'projects' ? 'Fleet Management' : currentProject?.name || 'Selection'}
-                            </h2>
-                            {currentProject && activeTab !== 'projects' && (
-                                <span className="text-[10px] text-muted font-mono truncate max-w-[100px] sm:max-w-none hidden sm:block">
-                                    {currentProject.fullName}
-                                </span>
-                            )}
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] text-white/30 leading-none mb-1">
+                                {activeTab === 'projects' ? 'Fleet Context' : (currentProject ? 'Project Active' : 'System')}
+                            </span>
+                            <div className="flex items-baseline gap-2 min-w-0">
+                                <h1 className="text-xs sm:text-lg md:text-xl font-black text-white uppercase tracking-tighter truncate max-w-[120px] sm:max-w-none">
+                                    {activeTab === 'projects' ? 'Management' : currentProject?.name || 'RiskSurface'}
+                                </h1>
+                                {currentProject && activeTab !== 'projects' && (
+                                    <span className="hidden sm:block text-[9px] uppercase font-bold text-white/20 tracking-widest truncate">
+                                        / {currentProject.owner}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -446,43 +523,27 @@ export default function App() {
                             </button>
                         )}
                         {connection && (
-                            <>
-                                {selectedProject && (
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setIsExportOpen(!isExportOpen)}
-                                            className={cn(
-                                                "text-[9px] md:text-[10px] font-black px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-all tracking-widest uppercase border flex items-center gap-1 md:gap-2",
-                                                isExportOpen ? "bg-white text-black border-white" : "bg-white/5 text-white border-white/10 hover:bg-white/10"
-                                            )}
-                                        >
-                                            <Download size={12} className="md:w-[14px] md:h-[14px]" />
-                                            <span className="hidden sm:inline">Export</span>
-                                        </button>
-                                        <ExportDropdown
-                                            isOpen={isExportOpen}
-                                            onClose={() => setIsExportOpen(false)}
-                                            activeTab={activeTab}
-                                            projectId={selectedProject || ''}
-                                        />
-                                    </div>
-                                )}
-                                <button
-                                    onClick={handleLogout}
-                                    className="md:hidden flex items-center gap-1 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-muted hover:text-red-400"
-                                    title="Logout"
-                                >
-                                    <LogOut size={16} />
-                                </button>
-                            </>
+                            <button
+                                onClick={handleLogout}
+                                className="md:hidden flex items-center gap-1 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-muted hover:text-red-400"
+                                title="Logout"
+                            >
+                                <LogOut size={16} />
+                            </button>
                         )}
-                        <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
                     </div>
                 </header>
 
 
-                {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+                {/* Content Area - No scroll during loading */}
+                <div
+                    ref={contentRef}
+                    className={cn(
+                        "flex-1 custom-scrollbar flex flex-col",
+                        isAnalysisReady ? "overflow-y-auto" : "overflow-hidden",
+                        (connection || activeTab !== 'projects') ? "p-4 md:p-8" : "p-4 md:px-8 md:pt-0 md:pb-2"
+                    )}
+                >
                     <AnimatePresence mode="wait">
                         {(isAnalysisReady || activeTab === 'projects') ? (
                             <motion.div
@@ -493,7 +554,7 @@ export default function App() {
                                 transition={{ duration: 0.2 }}
                                 className={cn(
                                     "max-w-[1400px] mx-auto w-full",
-                                    (connection || activeTab !== 'projects') ? "space-y-8 md:space-y-12 pb-20" : "min-h-full flex items-center justify-center text-center py-6 md:py-0"
+                                    (connection || activeTab !== 'projects') ? "space-y-8 md:space-y-12 pb-8" : "w-full"
                                 )}
                             >
                                 <ErrorBoundary key={`eb-${activeTab}-${projectVersion}`}>
@@ -507,7 +568,7 @@ export default function App() {
                                             onConnect={() => setShowConnectModal(true)}
                                         />
                                     )}
-                                    {activeTab === 'overview' && selectedProject && (
+                                    {activeTab === 'analysis' && selectedProject && (
                                         <RealDashboard key={`dashboard-${projectVersion}`} projectId={selectedProject} />
                                     )}
                                     {activeTab === 'risk-map' && selectedProject && (
@@ -542,31 +603,26 @@ export default function App() {
                         )}
                     </AnimatePresence>
 
-                    {/* Copyright Footer */}
-                    <footer className="text-center py-3 mt-4 border-t border-white/5">
-                        <a
-                            href="https://github.com/yusufcalisir/RiskSurface"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-muted hover:text-white transition-colors uppercase tracking-widest"
-                        >
-                            © 2025 RiskSurface — Made by Yusuf Çalışır
-                        </a>
-                    </footer>
+                    {/* Copyright Footer - Hidden while loading */}
+                    {isAnalysisReady && (
+                        <footer className="text-center py-1 mt-auto opacity-30 hover:opacity-100 transition-opacity">
+                            <a
+                                href="https://github.com/yusufcalisir/RiskSurface"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[8px] text-muted hover:text-white transition-colors uppercase tracking-widest font-black"
+                            >
+                                © 2025 RiskSurface - Made by Yusuf Çalışır
+                            </a>
+                        </footer>
+                    )}
                 </div>
 
-                {/* Mobile Tab Bar - Horizontally Scrollable */}
-                <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/80 backdrop-blur-xl border-t border-white/5 z-50 flex items-center overflow-hidden">
+                {/* Mobile Tab Bar - Smooth Centrally Scrollable */}
+                <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/90 backdrop-blur-2xl border-t border-white/10 z-50 flex items-center">
                     <div
                         id="mobile-nav-scroll"
-                        onScroll={(e) => {
-                            const target = e.currentTarget;
-                            const atEnd = target.scrollLeft + target.clientWidth >= target.scrollWidth - 10;
-                            if (atEnd !== isMobileNavAtEnd) {
-                                setIsMobileNavAtEnd(atEnd);
-                            }
-                        }}
-                        className="flex-1 flex items-center gap-8 overflow-x-auto no-scrollbar scroll-smooth px-6"
+                        className="flex-1 flex items-center gap-10 overflow-x-auto no-scrollbar scroll-smooth px-8 py-2 snap-x snap-mandatory"
                     >
                         {navItems.map((item) => {
                             const isActive = activeTab === item.id;
@@ -574,45 +630,36 @@ export default function App() {
                             return (
                                 <button
                                     key={item.id}
-                                    onClick={() => {
-                                        if (!isDisabled) setActiveTab(item.id);
+                                    onClick={(e) => {
+                                        if (isDisabled) return;
+                                        setActiveTab(item.id);
+                                        e.currentTarget.scrollIntoView({
+                                            behavior: 'smooth',
+                                            block: 'nearest',
+                                            inline: 'center'
+                                        });
                                     }}
                                     className={cn(
-                                        "flex flex-col items-center gap-1 shrink-0 transition-all",
-                                        isActive ? "text-risk-high" : "text-muted",
-                                        isDisabled && "opacity-20"
+                                        "flex flex-col items-center gap-1.5 shrink-0 transition-all snap-center py-1",
+                                        isActive ? "text-risk-high scale-110" : "text-muted",
+                                        isDisabled && "opacity-20 grayscale pointer-events-none"
                                     )}
                                 >
-                                    <item.icon size={20} />
-                                    <span className="text-[9px] font-black uppercase tracking-tighter whitespace-nowrap">{item.label}</span>
+                                    <div className={cn(
+                                        "p-2 rounded-xl transition-all",
+                                        isActive ? "bg-risk-high/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]" : "bg-transparent"
+                                    )}>
+                                        <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                                    </div>
+                                    <span className={cn(
+                                        "text-[8px] font-black uppercase tracking-tighter whitespace-nowrap transition-all",
+                                        isActive ? "opacity-100" : "opacity-40"
+                                    )}>
+                                        {item.label}
+                                    </span>
                                 </button>
                             );
                         })}
-                    </div>
-
-                    {/* Dedicated scroll arrow area */}
-                    <div className="h-full px-2 border-l border-white/5 flex items-center bg-surface/40 backdrop-blur-sm shrink-0">
-                        <motion.button
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => {
-                                const container = document.getElementById('mobile-nav-scroll');
-                                if (container) {
-                                    if (isMobileNavAtEnd) {
-                                        container.scrollTo({ left: 0, behavior: 'smooth' });
-                                    } else {
-                                        container.scrollBy({ left: 200, behavior: 'smooth' });
-                                    }
-                                }
-                            }}
-                            className="p-3 bg-risk-high/10 border border-risk-high/20 rounded-xl active:opacity-60 transition-all"
-                        >
-                            <motion.div
-                                animate={{ rotate: isMobileNavAtEnd ? 180 : 0 }}
-                                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                            >
-                                <ChevronRight size={18} className="text-risk-high" />
-                            </motion.div>
-                        </motion.button>
                     </div>
                 </div>
             </main>
@@ -676,5 +723,87 @@ function TrajectoryCard({
                 <p className="text-[11px] text-muted">{sub}</p>
             </div>
         </motion.div>
+    );
+}
+
+// ==================== PREMIUM LOADER ====================
+
+function TacticalLoader() {
+    return (
+        <div className="flex h-screen w-screen flex-col items-center justify-center bg-[#0a0a0b] relative overflow-hidden">
+            {/* Background Mesh */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(239,68,68,0.08),transparent_70%)] opacity-50" />
+
+            <div className="relative flex flex-col items-center">
+                {/* Logo Section */}
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 1.2, ease: "easeOut" }}
+                    className="relative mb-12"
+                >
+                    <div className="flex items-center gap-6">
+                        <div className="w-16 h-16 rounded-2xl bg-risk-high/10 border border-risk-high/20 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(239,68,68,0.1)]">
+                            <motion.div
+                                animate={{
+                                    height: ["20%", "70%", "40%", "90%", "30%"],
+                                }}
+                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute inset-x-0 bottom-0 bg-risk-high/40"
+                            />
+                            <Activity size={32} className="text-risk-high relative z-10 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+                        </div>
+                        <h1 className="text-5xl md:text-7xl font-black tracking-[0.25em] text-white selection:bg-risk-high/30">
+                            RISKSURFACE
+                        </h1>
+                    </div>
+
+                    {/* Shimmer Effect */}
+                    <motion.div
+                        animate={{ x: ["-100%", "250%"] }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "linear", repeatDelay: 1 }}
+                        className="absolute inset-x-0 top-0 bottom-0 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12 pointer-events-none"
+                    />
+                </motion.div>
+
+                {/* Status Section */}
+                <div className="flex flex-col items-center gap-4">
+                    <div className="flex items-center gap-3">
+                        <motion.div
+                            animate={{ opacity: [0.4, 1, 0.4] }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                            className="w-2 h-2 rounded-full bg-risk-high shadow-[0_0_10px_rgba(239,68,68,0.8)]"
+                        />
+                        <span className="text-xs md:text-sm font-black uppercase tracking-[0.4em] text-white/40 animate-pulse">
+                            Initializing Architectural Intelligence Engine
+                        </span>
+                    </div>
+
+                    <div className="w-64 h-1.5 bg-white/5 rounded-full overflow-hidden relative border border-white/5">
+                        <motion.div
+                            initial={{ width: "0%" }}
+                            animate={{ width: "100%" }}
+                            transition={{ duration: 3, ease: "easeInOut" }}
+                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-risk-high/50 to-risk-high shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+                        />
+                    </div>
+                </div>
+
+                {/* Tactical Overlays */}
+                <div className="absolute -top-40 -left-40 w-80 h-80 border border-white/[0.01] rounded-full" />
+                <div className="absolute -bottom-40 -right-40 w-80 h-80 border border-white/[0.01] rounded-full" />
+            </div>
+
+            {/* Bottom Version Tag */}
+            <div className="absolute bottom-10 flex flex-col items-center gap-2">
+                <div className="text-[9px] font-black tracking-[0.5em] text-white/20 uppercase">
+                    System Core v1.1.2 // Production Ready
+                </div>
+                <div className="flex gap-4 opacity-10">
+                    <div className="h-[1px] w-12 bg-white" />
+                    <div className="h-[1px] w-12 bg-white" />
+                </div>
+            </div>
+        </div>
     );
 }

@@ -22,9 +22,9 @@ const tiles = [
 
 export default function LandingGrid({ onConnect }: LandingGridProps) {
     return (
-        <div className="w-full min-h-full flex items-center justify-center py-4 md:py-8 relative">
+        <div className="w-full relative pt-1 md:pt-2">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.02),transparent)] pointer-events-none" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-[1600px] relative z-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-[1600px] relative z-10">
                 {tiles.map((tile, index) => (
                     <motion.div
                         key={tile.id}

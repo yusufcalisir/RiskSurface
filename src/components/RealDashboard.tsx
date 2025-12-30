@@ -8,6 +8,7 @@ import {
 
 import { API_BASE } from '../config';
 import ActivityHeatMap from './ActivityHeatMap';
+import ProjectContextHeader from './ProjectContextHeader';
 
 interface RepoMetadata {
     fullName: string;
@@ -171,7 +172,8 @@ export default function RealDashboard({ projectId }: Props) {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API_BASE}/api/projects/selected`);
+            // PAGE-SPECIFIC ENDPOINT: Fetches only dashboard-relevant data
+            const res = await fetch(`${API_BASE}/api/analysis/dashboard`);
             if (!res.ok) {
                 setError('No project selected');
                 setLoading(false);
@@ -287,15 +289,39 @@ export default function RealDashboard({ projectId }: Props) {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-96">
-                <div className="text-muted">Loading analysis data from GitHub...</div>
+            <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 animate-in fade-in duration-500">
+                {/* Stacked bar chart filling animation */}
+                <div className="flex items-end gap-2 h-20">
+                    {[60, 80, 45, 100, 70, 55, 90].map((h, i) => (
+                        <div key={i} className="w-3 bg-white/5 rounded-t-sm overflow-hidden" style={{ height: `${h}%` }}>
+                            <div
+                                className="w-full bg-gradient-to-t from-purple-500 to-blue-400 rounded-t-sm animate-pulse"
+                                style={{
+                                    height: '100%',
+                                    animation: `fillUp 1.5s ease-in-out infinite`,
+                                    animationDelay: `${i * 150}ms`
+                                }}
+                            />
+                        </div>
+                    ))}
+                </div>
+                <style>{`
+                    @keyframes fillUp {
+                        0%, 100% { transform: scaleY(0.3); opacity: 0.5; }
+                        50% { transform: scaleY(1); opacity: 1; }
+                    }
+                `}</style>
+                <div className="text-center space-y-2">
+                    <h3 className="text-lg font-black text-white uppercase tracking-widest">Analysis</h3>
+                    <p className="text-sm text-white/40 font-medium">Aggregating risk metrics...</p>
+                </div>
             </div>
         );
     }
 
     if (error || !repo) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 gap-4">
+            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] gap-4">
                 <AlertCircle size={48} className="text-muted" />
                 <div className="text-muted text-center">
                     <p className="font-bold">{error || 'No data available'}</p>
@@ -308,7 +334,7 @@ export default function RealDashboard({ projectId }: Props) {
     // Safety check: if repo exists but analysis is missing, show error
     if (!repo.analysis) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 gap-4">
+            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] gap-4">
                 <AlertCircle size={48} className="text-orange-500" />
                 <div className="text-center">
                     <p className="font-bold text-white">Analysis Data Missing</p>
@@ -323,47 +349,30 @@ export default function RealDashboard({ projectId }: Props) {
 
     return (
         <div className="space-y-8">
-            {/* Repository Header */}
+            <ProjectContextHeader title="Systemic Risk Dashboard" projectId={projectId} />
+
+            {/* Repository Info Summary (Compact) */}
             <div className="glass-panel rounded-2xl p-4 md:p-6 border border-white/5">
-                <div className="flex flex-col gap-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-4 min-w-0">
                         <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center border border-white/10 shrink-0 shadow-lg">
                             <GitBranch size={24} className="text-white md:hidden" />
                             <GitBranch size={28} className="text-white hidden md:block" />
                         </div>
                         <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <h1 className="text-lg md:text-2xl font-black text-white truncate uppercase tracking-tight max-w-full">{metadata?.fullName || repo.name}</h1>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h1 className="text-sm sm:text-lg md:text-xl font-bold text-white truncate uppercase tracking-tight max-w-[calc(100%-34px)]">{metadata?.description || 'Repository Metadata Active'}</h1>
                                 <a
                                     href={repo.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-muted hover:text-white transition-colors shrink-0 p-1 bg-white/5 rounded-md border border-white/10"
                                 >
-                                    <ExternalLink size={14} />
+                                    <ExternalLink size={12} />
                                 </a>
                             </div>
-                            <p className="text-muted text-[10px] md:text-sm mt-1 line-clamp-1 italic font-medium opacity-60">{metadata?.description || 'No description'}</p>
                         </div>
                     </div>
-
-                    <button
-                        onClick={handleRefresh}
-                        disabled={refreshing}
-                        className="w-full flex md:hidden items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-white/5 active:scale-95"
-                    >
-                        <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                        Refresh Analysis
-                    </button>
-
-                    <button
-                        onClick={handleRefresh}
-                        disabled={refreshing}
-                        className="hidden md:flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-black uppercase tracking-widest transition-all ml-auto"
-                    >
-                        <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                        Refresh
-                    </button>
                 </div>
 
 
@@ -423,7 +432,7 @@ export default function RealDashboard({ projectId }: Props) {
                     label="Dependencies"
                     value={`${analysis?.dependencyCount || 0}`}
                     maxValue="total"
-                    description={analysis?.dependencyCount ? 'Parsed from manifest' : 'No manifest found'}
+                    description={analysis?.dependencyCount ? 'Parsed from manifest' : 'No dependencies detected'}
                     color={analysis?.dependencyCount && analysis.dependencyCount > 50 ? 'yellow' : 'blue'}
                     icon={Package}
                 />
@@ -1001,17 +1010,18 @@ function ScoreCard({
     };
 
     return (
-        <div className={`rounded-xl p-4 bg-gradient-to-br ${colors[color]} border shadow-xl`}>
-            <div className="flex items-center gap-2 mb-2">
-                <Icon size={14} className={iconColors[color]} />
-                <span className="text-[10px] text-white/40 uppercase tracking-widest font-black shrink-0">{label}</span>
+        <div className={`rounded-xl p-3 md:p-4 bg-gradient-to-br ${colors[color]} border shadow-xl flex flex-col justify-between h-full`}>
+            <div>
+                <div className="flex items-center gap-2 mb-2">
+                    <Icon size={14} className={iconColors[color]} />
+                    <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest font-black shrink-0">{label}</span>
+                </div>
+                <div className="flex items-baseline gap-1 flex-wrap">
+                    <span className="text-lg sm:text-xl md:text-2xl font-black text-white tracking-tighter leading-tight">{value}</span>
+                    <span className="text-[9px] md:text-[10px] text-white/20 font-bold uppercase">{maxValue}</span>
+                </div>
             </div>
-            <div className="flex items-baseline gap-1">
-                <span className="text-xl md:text-2xl font-black text-white tracking-tighter">{value}</span>
-                <span className="text-[10px] text-white/20 font-bold uppercase">{maxValue}</span>
-            </div>
-            <div className="text-[10px] text-white/40 mt-1 font-medium truncate">{description}</div>
+            <div className="text-[9px] md:text-[10px] text-white/40 mt-1 font-medium leading-tight">{description}</div>
         </div>
-
     );
 }

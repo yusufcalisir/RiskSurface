@@ -11,6 +11,7 @@ import {
     ArrowUpRight,
     Info
 } from 'lucide-react';
+import ProjectContextHeader from './ProjectContextHeader';
 
 import { API_BASE } from '../config';
 
@@ -62,7 +63,8 @@ export default function RealTrajectory({ projectId }: Props) {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API_BASE}/api/projects/selected`);
+            // PAGE-SPECIFIC ENDPOINT: Fetches only trajectory-relevant data
+            const res = await fetch(`${API_BASE}/api/analysis/trajectory`);
             const data = await res.json();
 
             // CRITICAL: Validate project context matches expected
@@ -109,23 +111,24 @@ export default function RealTrajectory({ projectId }: Props) {
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-700">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
+            <ProjectContextHeader title="Risk Trajectory" projectId={projectId} />
+
+            {/* Velocity Controls (Integrated into Header Row) */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
                         <History className="text-purple-400" size={18} />
                         <h2 className="text-[10px] md:text-sm font-black uppercase tracking-widest text-white/30">Architectural Pulse</h2>
                     </div>
-                    <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">Risk Trajectory</h1>
                 </div>
 
 
-                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 self-start">
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 self-start overflow-x-auto max-w-full no-scrollbar">
                     {(['7d', '30d', 'all'] as TimeWindow[]).map((w) => (
                         <button
                             key={w}
                             onClick={() => setTimeWindow(w)}
-                            className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${timeWindow === w
+                            className={`px-4 sm:px-6 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${timeWindow === w
                                 ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
                                 : 'text-white/40 hover:text-white/70'
                                 }`}
@@ -208,7 +211,7 @@ export default function RealTrajectory({ projectId }: Props) {
                                 className="absolute top-0 pointer-events-none"
                                 style={{ left: `${(hoveredIndex / Math.max(filteredSnapshots.length - 1, 1)) * 100}%`, transform: 'translateX(-50%)' }}
                             >
-                                <div className="bg-black/80 backdrop-blur-md border border-white/20 rounded-xl p-4 shadow-2xl min-w-[180px]">
+                                <div className="bg-black/80 backdrop-blur-md border border-white/20 rounded-xl p-3 sm:p-4 shadow-2xl min-w-[140px] sm:min-w-[180px] max-w-[calc(100vw-40px)]">
                                     <div className="text-white/40 text-[10px] font-bold uppercase mb-1">{filteredSnapshots[hoveredIndex].date}</div>
                                     <div className="flex items-end gap-2">
                                         <div className="text-2xl font-black text-white">{filteredSnapshots[hoveredIndex].riskScore.toFixed(1)}</div>
@@ -309,16 +312,38 @@ function MetricCard({ title, value, trend, description, icon: Icon }: { title: s
 
 function LoadingState() {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6">
-            <div className="relative">
-                <div className="w-16 h-16 rounded-full border-t-2 border-purple-500 animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <History size={20} className="text-purple-500" />
-                </div>
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 animate-in fade-in duration-500">
+            {/* Ascending line chart animation */}
+            <div className="relative w-32 h-20">
+                <svg viewBox="0 0 100 50" className="w-full h-full">
+                    <path
+                        d="M0,45 Q20,40 30,35 T50,25 T70,15 T100,5"
+                        fill="none"
+                        stroke="url(#trajectoryGradient)"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        className="animate-pulse"
+                        style={{ strokeDasharray: 200, strokeDashoffset: 0, animation: 'drawLine 2s ease-in-out infinite' }}
+                    />
+                    <defs>
+                        <linearGradient id="trajectoryGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#a855f7" />
+                            <stop offset="100%" stopColor="#6366f1" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div className="absolute right-0 top-0 w-3 h-3 bg-purple-500 rounded-full animate-ping" />
             </div>
-            <div className="text-center">
-                <div className="text-white font-black uppercase tracking-widest text-sm mb-1">Synchronizing</div>
-                <div className="text-white/20 text-[10px] uppercase font-bold">Querying Architectural History</div>
+            <style>{`
+                @keyframes drawLine {
+                    0% { stroke-dashoffset: 200; }
+                    50% { stroke-dashoffset: 0; }
+                    100% { stroke-dashoffset: 200; }
+                }
+            `}</style>
+            <div className="text-center space-y-2">
+                <h3 className="text-lg font-black text-white uppercase tracking-widest">Risk Trajectory</h3>
+                <p className="text-sm text-white/40 font-medium">Mapping historical risk vectors...</p>
             </div>
         </div>
     );
@@ -326,7 +351,7 @@ function LoadingState() {
 
 function UnavailableState({ reason }: { reason?: string }) {
     return (
-        <div className="flex flex-col items-center justify-center h-[500px] gap-6 px-12">
+        <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-6 px-12">
             <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
                 <Activity size={40} className="text-white/10" />
             </div>

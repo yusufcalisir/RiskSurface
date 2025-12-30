@@ -22,6 +22,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 build_log.txt
+*.log
 
 # IDEs
 .vscode/
@@ -35,8 +36,11 @@ build_log.txt
 # Backend (Go)
 /server/risksurface-server
 /server/risksurface-server.exe
+/server/risksurface.exe
+/server/main.exe
 /server/state.json
 /server/*.exe
 /server/*.txt
 /server/check_api.json
+/server/vendor/
 

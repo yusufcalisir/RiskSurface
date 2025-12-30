@@ -633,7 +633,7 @@ export default function App() {
                     {(isAnalysisReady && !isTabLoading) && (
                         <footer className="text-center py-1 mt-auto opacity-30 hover:opacity-100 transition-opacity">
                             <a
-                                href="https://github.com/repository/RiskSurface"
+                                href="https://github.com/yusufcalisir/RiskSurface"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[8px] text-muted hover:text-white transition-colors uppercase tracking-widest font-black"

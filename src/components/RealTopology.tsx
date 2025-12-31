@@ -98,7 +98,7 @@ export default function RealTopology({ projectId, onLoadingChange }: Props) {
         try {
             const res = await fetch(`${API_BASE}/api/topology`);
             const data = await res.json();
-            console.log('[RealTopology] Data for project:', projectId, data);
+
 
             // CRITICAL: Validate response matches expected project
             if (data.projectFullName && data.projectFullName !== projectId) {

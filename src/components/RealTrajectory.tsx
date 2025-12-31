@@ -212,35 +212,47 @@ export default function RealTrajectory({ projectId, onLoadingChange }: Props) {
                     </svg>
 
                     <AnimatePresence>
-                        {hoveredIndex !== null && filteredSnapshots[hoveredIndex] && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 10 }}
-                                className="absolute top-0 pointer-events-none"
-                                style={{ left: `${(hoveredIndex / Math.max(filteredSnapshots.length - 1, 1)) * 100}%`, transform: 'translateX(-50%)' }}
-                            >
-                                <div className="bg-black/80 backdrop-blur-md border border-white/20 rounded-xl p-3 sm:p-4 shadow-2xl min-w-[140px] sm:min-w-[180px] max-w-[calc(100vw-40px)]">
-                                    <div className="text-white/40 text-[10px] font-bold uppercase mb-1">{filteredSnapshots[hoveredIndex].date}</div>
-                                    <div className="flex items-end gap-2">
-                                        <div className="text-2xl font-black text-white">{filteredSnapshots[hoveredIndex].riskScore.toFixed(1)}</div>
-                                        <div className={`text-[10px] font-bold mb-1 ${filteredSnapshots[hoveredIndex].riskDelta > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                            {filteredSnapshots[hoveredIndex].riskDelta > 0 ? '+' : ''}{filteredSnapshots[hoveredIndex].riskDelta.toFixed(1)}
+                        {hoveredIndex !== null && filteredSnapshots[hoveredIndex] && (() => {
+                            const isNearRight = hoveredIndex > filteredSnapshots.length * 0.6;
+                            const isNearLeft = hoveredIndex < filteredSnapshots.length * 0.4;
+                            const leftPercent = (hoveredIndex / Math.max(filteredSnapshots.length - 1, 1)) * 100;
+
+                            return (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    className="absolute top-0 pointer-events-none z-50"
+                                    style={
+                                        isNearRight
+                                            ? { right: `${100 - leftPercent}%`, transform: 'translateX(50%)' }
+                                            : isNearLeft
+                                                ? { left: `${leftPercent}%`, transform: 'translateX(-10%)' }
+                                                : { left: `${leftPercent}%`, transform: 'translateX(-50%)' }
+                                    }
+                                >
+                                    <div className="bg-black/90 backdrop-blur-md border border-white/20 rounded-xl p-3 sm:p-4 shadow-2xl min-w-[140px] sm:min-w-[180px]">
+                                        <div className="text-white/40 text-[10px] font-bold uppercase mb-1">{filteredSnapshots[hoveredIndex].date}</div>
+                                        <div className="flex items-end gap-2">
+                                            <div className="text-2xl font-black text-white">{filteredSnapshots[hoveredIndex].riskScore.toFixed(1)}</div>
+                                            <div className={`text-[10px] font-bold mb-1 ${filteredSnapshots[hoveredIndex].riskDelta > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                                {filteredSnapshots[hoveredIndex].riskDelta > 0 ? '+' : ''}{filteredSnapshots[hoveredIndex].riskDelta.toFixed(1)}
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-white/10 uppercase font-bold text-[9px] text-white/50">
+                                            <div>
+                                                <div className="text-white/20">Commits</div>
+                                                <div className="text-white">{filteredSnapshots[hoveredIndex].commitCount}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-white/20">Churn</div>
+                                                <div className="text-white">{(filteredSnapshots[hoveredIndex].churnScore / 1000).toFixed(1)}k</div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-white/10 uppercase font-bold text-[9px] text-white/50">
-                                        <div>
-                                            <div className="text-white/20">Commits</div>
-                                            <div className="text-white">{filteredSnapshots[hoveredIndex].commitCount}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-white/20">Churn</div>
-                                            <div className="text-white">{(filteredSnapshots[hoveredIndex].churnScore / 1000).toFixed(1)}k</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
+                                </motion.div>
+                            );
+                        })()}
                     </AnimatePresence>
                 </div>
 
@@ -313,7 +325,7 @@ function MetricCard({ title, value, trend, description, icon: Icon }: { title: s
                 </div>
             </div>
             <div className="text-[10px] font-black uppercase text-white/30 tracking-widest mb-1">{title}</div>
-            <div className="text-3xl font-black text-white mb-2 capitalize">{value}</div>
+            <div className="text-xl md:text-3xl font-black text-white mb-2 capitalize">{value}</div>
             <p className="text-[11px] leading-relaxed text-white/40">{description}</p>
         </div>
     );

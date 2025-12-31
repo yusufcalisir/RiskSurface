@@ -83,7 +83,7 @@ const navItems = [
 ];
 
 export default function App() {
-    console.log('[DEBUG] App component rendering...')
+
 
     // Router hooks
     const navigate = useNavigate();
@@ -403,6 +403,11 @@ export default function App() {
                             onClick={() => {
                                 if (isDisabled) return;
                                 if (isActive) return;
+
+                                if (item.id === 'projects') {
+                                    setSelectedProject(null);
+                                }
+
                                 setIsAnalysisReady(false);
                                 setActiveTab(item.id);
                                 setTimeout(() => setIsAnalysisReady(true), 400);
@@ -411,7 +416,7 @@ export default function App() {
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all relative group",
                                 isActive ? "bg-white/10 text-white shadow-[0_4px_20px_rgba(0,0,0,0.3)]" : "text-muted hover:text-white hover:bg-white/5",
-                                isDisabled && "opacity-30 cursor-not-allowed"
+                                isDisabled && "opacity-30 cursor-not-allowed pointer-events-none"
                             )}
                         >
                             <item.icon size={20} className={cn(isActive ? "text-risk-high drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "text-muted group-hover:text-white")} />
@@ -841,7 +846,7 @@ function TacticalLoader() {
             </div>
 
             {/* Bottom Version Tag */}
-            <div className="absolute bottom-10 flex flex-col items-center gap-2 w-full px-6 text-center">
+            <div className="absolute bottom-20 md:bottom-10 flex flex-col items-center gap-2 w-full px-6 text-center">
                 <div className="text-[8px] md:text-[9px] font-black tracking-[0.2em] md:tracking-[0.5em] text-white/20 uppercase">
                     System Core v1.1.2 // Production Ready
                 </div>

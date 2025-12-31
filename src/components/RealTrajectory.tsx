@@ -266,7 +266,7 @@ export default function RealTrajectory({ projectId, onLoadingChange }: Props) {
             </div>
 
             {/* Metrics */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 md:flex md:flex-wrap gap-4 md:gap-6">
                 <MetricCard
                     title="Computed Velocity"
                     value={`${trajectory.velocityFactor.toFixed(1)}x`}
@@ -313,7 +313,7 @@ function MetricCard({ title, value, trend, description, icon: Icon }: { title: s
     const isDown = trend === 'decelerating' || trend === 'down' || trend === 'increasing_risk';
 
     return (
-        <div className="glass-panel rounded-3xl p-4 md:p-6 border border-white/10 hover:border-white/20 transition-all">
+        <div className="glass-panel rounded-3xl p-4 md:p-6 border border-white/10 hover:border-white/20 transition-all md:flex-1 md:min-w-[300px] flex flex-col justify-between min-h-[160px] md:min-h-[220px]">
             <div className="flex items-center justify-between mb-4">
                 <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
                     <Icon size={18} className="text-purple-400" />
@@ -324,8 +324,12 @@ function MetricCard({ title, value, trend, description, icon: Icon }: { title: s
                     {trend.replace('_', ' ')}
                 </div>
             </div>
-            <div className="text-[10px] font-black uppercase text-white/30 tracking-widest mb-1">{title}</div>
-            <div className="text-xl md:text-3xl font-black text-white mb-2 capitalize">{value}</div>
+
+            <div className="flex-1 flex flex-col justify-center">
+                <div className="text-[10px] font-black uppercase text-white/30 tracking-widest mb-1">{title}</div>
+                <div className="text-xl md:text-3xl font-black text-white capitalize truncate">{value}</div>
+            </div>
+
             <p className="text-[11px] leading-relaxed text-white/40">{description}</p>
         </div>
     );

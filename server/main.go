@@ -832,11 +832,19 @@ type ContributorSurface struct {
 type BusFactorAnalysis struct {
 	Available           bool                 `json:"available"`
 	Reason              string               `json:"reason,omitempty"`
-	RiskLevel           string               `json:"riskLevel"` // "Low", "Moderate", "High"
+	RiskLevel           string               `json:"riskLevel"`   // "Undetermined", "Low", "Moderate", "High"
+	Explanation         string               `json:"explanation"` // Human-readable reasoning for risk level
+	Confidence          float64              `json:"confidence"`  // 0-1 data confidence score
+	DataQuality         string               `json:"dataQuality"` // "sufficient", "limited", "insufficient"
 	FileOwnerships      []FileOwnership      `json:"fileOwnerships"`
 	ContributorSurfaces []ContributorSurface `json:"contributorSurfaces"`
 	TotalContributors   int                  `json:"totalContributors"`
 	BusFactor           int                  `json:"busFactor"`
+	// Explainability metrics
+	CriticalSiloCount    int     `json:"criticalSiloCount"`             // Files with >80% single-owner
+	DistributedFileCount int     `json:"distributedFileCount"`          // Files with <50% single-owner
+	DominantContributor  string  `json:"dominantContributor,omitempty"` // Who owns the most risk
+	DominantOwnership    float64 `json:"dominantOwnership"`             // Their % of critical files
 }
 
 // ==================== TEMPORAL HOTSPOT TYPES ====================
@@ -3839,7 +3847,24 @@ func analyzeBusFactor(client *GitHubClient, owner, repo string, deps *Dependency
 	// We want a decent window to establish ownership
 	commits, err := client.GetCommits(owner, repo, 50)
 	if err != nil || len(commits) == 0 {
-		return &BusFactorAnalysis{Available: false, Reason: "Insufficient commit history"}
+		return &BusFactorAnalysis{
+			Available:   false,
+			Reason:      "No commit history available",
+			DataQuality: "insufficient",
+		}
+	}
+
+	// MINIMUM DATA THRESHOLD: Need at least 5 commits for meaningful analysis
+	if len(commits) < 5 {
+		return &BusFactorAnalysis{
+			Available:   true,
+			RiskLevel:   "Undetermined",
+			Reason:      "Insufficient commit history for reliable analysis",
+			Explanation: fmt.Sprintf("Only %d commits available. Minimum 5 commits required for bus factor analysis.", len(commits)),
+			DataQuality: "insufficient",
+			Confidence:  0.1,
+			BusFactor:   0,
+		}
 	}
 
 	fileAuthorCounts := make(map[string]map[string]int)
@@ -3961,7 +3986,15 @@ func analyzeBusFactor(client *GitHubClient, owner, repo string, deps *Dependency
 	}
 
 	if len(fileAuthorCounts) == 0 {
-		return &BusFactorAnalysis{Available: false, Reason: "No file-level authorship data available"}
+		return &BusFactorAnalysis{
+			Available:   true,
+			RiskLevel:   "Undetermined",
+			Reason:      "No file-level authorship data available",
+			Explanation: "Could not extract file ownership from commits. This may be due to API limitations or unusual commit structure.",
+			DataQuality: "insufficient",
+			Confidence:  0.1,
+			BusFactor:   0,
+		}
 	}
 
 	var ownerships []FileOwnership
@@ -4058,33 +4091,109 @@ func analyzeBusFactor(client *GitHubClient, owner, repo string, deps *Dependency
 		surfaces = append(surfaces, *stats)
 	}
 
-	// Aggregated Risk Signal
-	riskLevel := "Low"
-	busFactor := len(contributorStats)
+	// ============================================================
+	// DYNAMIC RISK CLASSIFICATION (Repository-Size Aware)
+	// ============================================================
 
-	// Real-world bus factor calculation
-	// If one person owns > 50% of critical files, Bus Factor is essentially 1
-	highRiskContributors := 0
-	for _, s := range surfaces {
-		if s.OwnedRiskArea > 50 {
-			highRiskContributors++
+	totalAnalyzedFiles := len(fileAuthorCounts)
+
+	// Dynamic thresholds based on repository size
+	var siloThreshold, sharedThreshold float64
+	if totalAnalyzedFiles <= 10 {
+		// Small repos: stricter thresholds (easier to silo)
+		siloThreshold = 90.0
+		sharedThreshold = 70.0
+	} else if totalAnalyzedFiles <= 50 {
+		// Medium repos: standard thresholds
+		siloThreshold = 80.0
+		sharedThreshold = 50.0
+	} else {
+		// Large repos: relaxed thresholds (expected some concentration)
+		siloThreshold = 75.0
+		sharedThreshold = 40.0
+	}
+
+	// Count critical metrics
+	criticalSiloCount := 0
+	distributedCount := 0
+	for _, os := range ownerships {
+		if os.OwnershipPercentage >= siloThreshold {
+			criticalSiloCount++
+		} else if os.OwnershipPercentage < sharedThreshold {
+			distributedCount++
 		}
 	}
 
-	if busFactor <= 1 || highRiskContributors >= 1 {
+	// Find dominant contributor
+	var dominantContributor string
+	var dominantOwnership float64
+	for _, s := range surfaces {
+		if s.OwnedRiskArea > dominantOwnership {
+			dominantOwnership = s.OwnedRiskArea
+			dominantContributor = s.Name
+		}
+	}
+
+	// Calculate data confidence (0-1)
+	commitConfidence := math.Min(float64(len(commits))/50.0, 1.0)
+	fileConfidence := math.Min(float64(totalAnalyzedFiles)/20.0, 1.0)
+	dataConfidence := (commitConfidence + fileConfidence) / 2.0
+
+	// Determine data quality
+	dataQuality := "sufficient"
+	if len(commits) < 10 || totalAnalyzedFiles < 5 {
+		dataQuality = "limited"
+	}
+
+	// Dynamic risk classification with explainability
+	siloRatio := float64(criticalSiloCount) / float64(max(totalAnalyzedFiles, 1))
+	distributionScore := float64(distributedCount) / float64(max(totalAnalyzedFiles, 1))
+
+	riskLevel := "Undetermined"
+	explanation := ""
+	busFactor := len(contributorStats)
+
+	if dataQuality == "limited" && len(contributorStats) <= 1 {
+		riskLevel = "Undetermined"
+		explanation = fmt.Sprintf("Insufficient data: analyzed %d commits across %d files with %d contributor(s). Cannot reliably assess bus factor.",
+			len(commits), totalAnalyzedFiles, len(contributorStats))
+		busFactor = 0
+	} else if dominantOwnership > 70 {
 		riskLevel = "High"
 		busFactor = 1
-	} else if busFactor <= 3 {
+		explanation = fmt.Sprintf("Critical: %s controls %.1f%% of analyzed risk surface. %d files have single-owner concentration above %.0f%%.",
+			dominantContributor, dominantOwnership, criticalSiloCount, siloThreshold)
+	} else if siloRatio > 0.5 || len(contributorStats) <= 2 {
 		riskLevel = "Moderate"
+		if busFactor > 2 {
+			busFactor = 2
+		}
+		explanation = fmt.Sprintf("Elevated risk: %.0f%% of files have concentrated ownership. %d unique contributors identified.",
+			siloRatio*100, len(contributorStats))
+	} else if distributionScore > 0.6 && len(contributorStats) >= 3 {
+		riskLevel = "Low"
+		explanation = fmt.Sprintf("Healthy distribution: %.0f%% of files have shared ownership across %d contributors.",
+			distributionScore*100, len(contributorStats))
+	} else {
+		riskLevel = "Moderate"
+		explanation = fmt.Sprintf("Mixed signals: %d files analyzed, %d contributors. Ownership is neither highly concentrated nor well-distributed.",
+			totalAnalyzedFiles, len(contributorStats))
 	}
 
 	return &BusFactorAnalysis{
-		Available:           true,
-		RiskLevel:           riskLevel,
-		FileOwnerships:      ownerships,
-		ContributorSurfaces: surfaces,
-		TotalContributors:   len(contributorStats),
-		BusFactor:           busFactor,
+		Available:            true,
+		RiskLevel:            riskLevel,
+		Explanation:          explanation,
+		Confidence:           dataConfidence,
+		DataQuality:          dataQuality,
+		FileOwnerships:       ownerships,
+		ContributorSurfaces:  surfaces,
+		TotalContributors:    len(contributorStats),
+		BusFactor:            busFactor,
+		CriticalSiloCount:    criticalSiloCount,
+		DistributedFileCount: distributedCount,
+		DominantContributor:  dominantContributor,
+		DominantOwnership:    dominantOwnership,
 	}
 }
 

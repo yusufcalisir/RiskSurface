@@ -411,7 +411,7 @@ export default function RealDashboard({ projectId, onLoadingChange, onTabChange 
 
 
             {/* Computed Scores - Deterministic from Real Data */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:flex md:flex-wrap gap-4">
                 <ScoreCard
                     label="Activity Score"
                     value={analysis?.activityScore?.toFixed(1) || '0'}
@@ -889,7 +889,7 @@ export default function RealDashboard({ projectId, onLoadingChange, onTabChange 
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="md:col-span-1 border-r border-white/5 pr-6">
                                 <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Dominant Focus</div>
-                                <div className="text-2xl font-black text-white capitalize">{analysis.intentAnalysis.dominantIntent}</div>
+                                <div className="text-xl md:text-3xl font-black text-white mb-2 capitalize truncate">{analysis.intentAnalysis.dominantIntent}</div>
                                 <p className="text-xs text-white/40 mt-2 leading-relaxed italic">
                                     "{analysis.intentAnalysis.recentFocusShift}"
                                 </p>
@@ -1016,17 +1016,19 @@ function ScoreCard({
     };
 
     return (
-        <div className={`rounded-xl p-3 md:p-4 bg-gradient-to-br ${colors[color]} border shadow-xl flex flex-col justify-between h-full`}>
-            <div>
-                <div className="flex items-center gap-2 mb-2">
-                    <Icon size={14} className={iconColors[color]} />
-                    <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest font-black shrink-0">{label}</span>
-                </div>
+        <div className={`rounded-xl p-3 md:p-4 bg-gradient-to-br ${colors[color]} border shadow-xl flex flex-col justify-between h-full md:flex-1 md:min-w-[180px] min-h-[100px] md:min-h-[120px]`}>
+            <div className="flex items-center gap-2 mb-2">
+                <Icon size={14} className={iconColors[color]} />
+                <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest font-black shrink-0">{label}</span>
+            </div>
+
+            <div className="flex-1 flex flex-col justify-center">
                 <div className="flex items-baseline gap-1 flex-wrap">
-                    <span className="text-lg sm:text-xl md:text-2xl font-black text-white tracking-tighter leading-tight">{value}</span>
+                    <span className="text-lg sm:text-xl md:text-2xl font-black text-white tracking-tighter leading-tight truncate">{value}</span>
                     <span className="text-[9px] md:text-[10px] text-white/20 font-bold uppercase">{maxValue}</span>
                 </div>
             </div>
+
             <div className="text-[9px] md:text-[10px] text-white/40 mt-1 font-medium leading-tight">{description}</div>
         </div>
     );

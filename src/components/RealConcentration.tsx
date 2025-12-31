@@ -45,11 +45,18 @@ interface ContributorSurface {
 interface BusFactorAnalysis {
     available: boolean;
     reason?: string;
-    riskLevel: 'Low' | 'Moderate' | 'High';
+    riskLevel: 'Low' | 'Moderate' | 'High' | 'Undetermined';
+    explanation?: string;
+    confidence?: number;
+    dataQuality?: 'sufficient' | 'limited' | 'insufficient';
     fileOwnerships: FileOwnership[];
     contributorSurfaces: ContributorSurface[];
     totalContributors: number;
     busFactor: number;
+    criticalSiloCount?: number;
+    distributedFileCount?: number;
+    dominantContributor?: string;
+    dominantOwnership?: number;
 }
 
 interface ConcentrationAnalysis {
@@ -132,61 +139,100 @@ export default function RealConcentration({ projectId, onLoadingChange }: Props)
             </div>
 
             {/* Summary Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="glass-panel rounded-2xl p-4 md:p-6 border border-white/10 relative overflow-hidden group">
+            <div className="grid grid-cols-1 md:flex md:flex-wrap gap-4 md:gap-6">
+                <div className="glass-panel rounded-2xl p-4 md:p-6 border border-white/10 relative overflow-hidden group md:flex-1 md:min-w-[320px] max-w-full flex flex-col justify-between min-h-[160px] md:min-h-[220px]">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <Target size={60} />
                     </div>
                     <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Concentration Index</div>
-                    <div className="text-5xl font-black text-white mb-2">{data.concentrationIndex.toFixed(1)}%</div>
+
+                    <div className="flex-1 flex flex-col justify-center">
+                        <div className="text-2xl md:text-6xl font-black text-white truncate">{data.concentrationIndex.toFixed(1)}%</div>
+                    </div>
+
                     <p className="text-xs text-white/40 leading-relaxed font-medium">
                         Top 10% of files account for this percentage of all analyzed changes.
                     </p>
                 </div>
 
-                <div className="glass-panel rounded-2xl p-4 md:p-6 border border-white/10 relative overflow-hidden group">
+                <div className="glass-panel rounded-2xl p-4 md:p-6 border border-white/10 relative overflow-hidden group md:flex-1 md:min-w-[320px] max-w-full flex flex-col justify-between min-h-[160px] md:min-h-[220px]">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <Clock size={60} />
                     </div>
-                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Analysis Scope</div>
-                    <div className="text-3xl font-black text-white mb-1">{data.totalCommitsAnalyzed} Commits</div>
-                    <div className="text-sm font-bold text-risk-high">{data.totalFilesTouched} Files Touched</div>
-                    <p className="text-xs text-white/40 mt-2 leading-relaxed font-medium">
-                        Data window: {data.window}
+                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-3">Analysis Scope</div>
+
+                    <div className="flex-1 flex flex-col justify-center">
+                        <div className="space-y-4">
+                            <div>
+                                <div className="text-3xl md:text-4xl font-black text-white leading-none">{data.totalCommitsAnalyzed}</div>
+                                <div className="text-[10px] uppercase font-bold text-white/30 mt-1">Commits Analyzed</div>
+                            </div>
+                            <div>
+                                <div className="text-xl md:text-2xl font-black text-risk-high leading-none">{data.totalFilesTouched}</div>
+                                <div className="text-[10px] uppercase font-bold text-white/30 mt-1">Files Touched</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p className="text-[10px] text-white/20 font-medium italic">
+                        Window: {data.window}
                     </p>
                 </div>
 
                 <div className={cn(
-                    "glass-panel rounded-2xl p-4 md:p-6 border transition-all relative overflow-hidden group",
+                    "glass-panel rounded-2xl p-4 md:p-6 border transition-all relative overflow-hidden group md:flex-1 md:min-w-[320px] max-w-full flex flex-col justify-between min-h-[180px] md:min-h-[220px]",
                     data.ownershipRisk?.riskLevel === 'High' ? "border-risk-critical/30 bg-risk-critical/5 shadow-lg shadow-risk-critical/5" : "border-white/10"
                 )}>
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between">
                         <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Bus Factor Risk</div>
                         {data.ownershipRisk && (
                             <div className={cn(
                                 "px-2 py-0.5 rounded text-[10px] font-black uppercase",
                                 data.ownershipRisk?.riskLevel === 'High' ? "bg-risk-critical text-white" :
-                                    data.ownershipRisk?.riskLevel === 'Moderate' ? "bg-risk-medium text-black" : "bg-health-good text-black"
+                                    data.ownershipRisk?.riskLevel === 'Moderate' ? "bg-risk-medium text-black" :
+                                        data.ownershipRisk?.riskLevel === 'Undetermined' ? "bg-white/20 text-white/60" :
+                                            "bg-health-good text-black"
                             )}>
                                 {data.ownershipRisk?.riskLevel || 'N/A'}
                             </div>
                         )}
                     </div>
-                    <div className="flex items-end gap-3 mb-2">
-                        <div className="text-5xl font-black text-white">{data.ownershipRisk?.busFactor || 0}</div>
-                        <div className="text-sm font-bold text-white/40 mb-1.5">Contributors</div>
+
+                    <div className="flex-1 flex flex-col justify-center">
+                        {data.ownershipRisk?.riskLevel === 'Undetermined' ? (
+                            <div className="flex flex-col gap-2">
+                                <div className="text-2xl md:text-3xl font-black text-white/40 leading-none">—</div>
+                                <div className="text-xs md:text-sm font-bold text-white/30 uppercase tracking-tight">Insufficient Data</div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-1">
+                                <div className="text-5xl md:text-7xl font-black text-white leading-none">{data.ownershipRisk?.busFactor || 0}</div>
+                                <div className="text-xs md:text-sm font-bold text-white/40 uppercase tracking-tight">Primary Contributors</div>
+                            </div>
+                        )}
                     </div>
-                    <p className="text-xs text-white/40 leading-relaxed font-medium">
-                        {data.ownershipRisk?.riskLevel === 'High'
-                            ? "Extreme dependency detected on a single point of failure in critical modules."
-                            : "Knowledge is relatively distributed across the contributing team."}
-                    </p>
+
+                    <div>
+                        <p className="text-[10px] text-white/40 leading-relaxed font-medium">
+                            {data.ownershipRisk?.explanation || (
+                                data.ownershipRisk?.riskLevel === 'High'
+                                    ? "Extreme dependency detected on a single point of failure in critical modules."
+                                    : "Knowledge is relatively distributed across the contributing team."
+                            )}
+                        </p>
+                    </div>
+
+                    {data.ownershipRisk?.dataQuality === 'limited' && data.ownershipRisk?.riskLevel !== 'Undetermined' && (
+                        <div className="mt-2 px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/20">
+                            <span className="text-[9px] text-yellow-500/80 font-bold uppercase">Limited data confidence</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Hotspots & Ownership List */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
-                <div className="lg:col-span-2 glass-panel rounded-2xl border border-white/10 overflow-hidden">
+            <div className="flex flex-col gap-6 w-full">
+                <div className="glass-panel rounded-2xl border border-white/10 overflow-hidden">
                     <div className="p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <BarChart3 className="text-white/40" size={20} />
@@ -257,8 +303,8 @@ export default function RealConcentration({ projectId, onLoadingChange }: Props)
                     </div>
                 </div>
 
-                {/* Contributor Dependency Surface */}
-                <div className="space-y-6">
+                {/* Contributor Dependency Surface - Now Below hotspots and content-fit */}
+                <div className="w-full md:self-center md:min-w-[500px] max-w-full">
                     <div className="glass-panel rounded-2xl border border-white/10 overflow-hidden h-full">
                         <div className="p-6 border-b border-white/10 bg-white/5 flex items-center gap-3">
                             <Users className="text-white/40" size={20} />

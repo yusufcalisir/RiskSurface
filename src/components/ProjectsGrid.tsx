@@ -94,7 +94,7 @@ export default function ProjectsGrid({
             </div>
 
             {/* Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:flex md:flex-wrap gap-4">
                 {projects.map((project, index) => {
                     const isSelected = selectedProject === project.fullName;
                     const isAnalyzing = analyzingProject === project.fullName;
@@ -109,7 +109,7 @@ export default function ProjectsGrid({
                             transition={{ delay: index * 0.03 }}
                             onClick={() => onSelectProject(project.fullName)}
                             disabled={isAnalyzing}
-                            className={`text-left p-4 rounded-xl border transition-all group ${isSelected
+                            className={`text-left p-4 rounded-xl border transition-all group flex flex-col justify-between min-h-[160px] md:flex-1 md:min-w-[300px] ${isSelected
                                 ? 'bg-white/10 border-white/30'
                                 : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
                                 } ${isAnalyzing ? 'opacity-70 cursor-wait' : ''}`}
@@ -170,6 +170,6 @@ export default function ProjectsGrid({
                     );
                 })}
             </div>
-        </div>
+        </div >
     );
 }

@@ -1,0 +1,184 @@
+RISKSURFACE PROPRIETARY SOFTWARE LICENSE AGREEMENT
+================================================================================
+
+Copyright (c) 2024-2025 Yusuf Çalışır. All Rights Reserved.
+
+NOTICE TO USER: PLEASE READ THIS LICENSE AGREEMENT CAREFULLY. BY USING,
+COPYING, OR DISTRIBUTING THIS SOFTWARE, YOU ACKNOWLEDGE THAT YOU HAVE READ,
+UNDERSTOOD, AND AGREE TO BE BOUND BY THE TERMS AND CONDITIONS OF THIS LICENSE.
+
+================================================================================
+1. DEFINITIONS
+================================================================================
+
+"Software" refers to RiskSurface, including but not limited to all source code,
+object code, documentation, user interfaces, APIs, algorithms, data structures,
+design elements, visual assets, and any associated materials.
+
+"Licensor" refers to Yusuf Çalışır, the sole owner and copyright holder of
+the Software.
+
+"User" refers to any individual or entity that accesses, views, downloads, or
+uses the Software in any capacity.
+
+================================================================================
+2. GRANT OF LICENSE
+================================================================================
+
+Subject to the terms and conditions of this Agreement, the Licensor grants you
+a limited, non-exclusive, non-transferable, revocable license to:
+
+a) View the source code for personal educational purposes only.
+b) Fork the repository for the sole purpose of submitting contributions back
+   to the original project.
+
+This license does NOT grant you any rights to:
+
+- Use the Software for commercial purposes
+- Modify, adapt, or create derivative works
+- Redistribute, sublicense, or sell the Software
+- Use the Software in production environments
+- Offer the Software as a hosted service (SaaS)
+- Remove or alter any proprietary notices or labels
+
+================================================================================
+3. RESTRICTIONS AND PROHIBITED USES
+================================================================================
+
+You expressly agree NOT to:
+
+a) COMMERCIAL USE: Use the Software, in whole or in part, for any commercial
+   purpose, including but not limited to selling, licensing, or monetizing
+   the Software or any derivative work.
+
+b) UNAUTHORIZED DISTRIBUTION: Copy, distribute, publish, or disseminate the
+   Software to any third party without prior written consent from the Licensor.
+
+c) REVERSE ENGINEERING: Decompile, disassemble, reverse engineer, or attempt
+   to derive the source code, algorithms, or data structures of the Software.
+
+d) TRADEMARK VIOLATION: Use the name "RiskSurface", associated logos, or any
+   trademarks of the Licensor without explicit written permission.
+
+e) COMPETING PRODUCTS: Use any part of the Software to develop, market, or
+   distribute a product or service that competes with RiskSurface.
+
+f) UNAUTHORIZED MODIFICATIONS: Modify, adapt, translate, or create derivative
+   works based on the Software without prior written consent.
+
+g) SUBLICENSING: Grant sublicenses or transfer any rights granted under this
+   Agreement to any third party.
+
+h) HOSTING AS SERVICE: Offer the Software as a hosted, cloud-based, or SaaS
+   solution to third parties.
+
+================================================================================
+4. INTELLECTUAL PROPERTY RIGHTS
+================================================================================
+
+The Software and all copies thereof are proprietary to the Licensor and title
+and all intellectual property rights therein remain with the Licensor. All
+rights in the Software not specifically granted in this Agreement are reserved
+to the Licensor.
+
+The Software is protected by copyright laws and international copyright
+treaties, as well as other intellectual property laws and treaties. The
+Software is licensed, not sold.
+
+================================================================================
+5. CONTRIBUTIONS
+================================================================================
+
+Any contributions, suggestions, ideas, or feedback ("Contributions") submitted
+to the Licensor regarding the Software shall become the exclusive property of
+the Licensor. By submitting Contributions, you irrevocably assign all rights,
+title, and interest in and to the Contributions to the Licensor.
+
+================================================================================
+6. DISCLAIMER OF WARRANTIES
+================================================================================
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+THE LICENSOR DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE,
+UNINTERRUPTED, SECURE, OR MEET YOUR REQUIREMENTS.
+
+YOU ASSUME ALL RISK ASSOCIATED WITH THE USE OF THE SOFTWARE.
+
+================================================================================
+7. LIMITATION OF LIABILITY
+================================================================================
+
+IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR PUNITIVE DAMAGES (INCLUDING BUT NOT
+LIMITED TO PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES, LOSS OF USE, DATA, OR
+PROFITS, OR BUSINESS INTERRUPTION) ARISING OUT OF OR RELATED TO THIS AGREEMENT
+OR THE USE OF THE SOFTWARE, HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+OTHERWISE), EVEN IF THE LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGES.
+
+================================================================================
+8. TERMINATION
+================================================================================
+
+This license is effective until terminated. Your rights under this license will
+terminate automatically without notice if you fail to comply with any of its
+terms and conditions.
+
+Upon termination, you must:
+a) Cease all use of the Software
+b) Destroy all copies of the Software in your possession
+c) Remove any installations of the Software from your systems
+
+================================================================================
+9. ENFORCEMENT AND LEGAL ACTION
+================================================================================
+
+The Licensor reserves the right to pursue all available legal remedies against
+any individual or entity that violates the terms of this Agreement, including
+but not limited to:
+
+a) Injunctive relief to prevent further violations
+b) Recovery of actual damages and lost profits
+c) Statutory damages as provided by applicable law
+d) Recovery of attorney's fees and legal costs
+
+Unauthorized use, reproduction, or distribution of the Software may result in
+severe civil and criminal penalties.
+
+================================================================================
+10. GOVERNING LAW
+================================================================================
+
+This Agreement shall be governed by and construed in accordance with the laws
+of the Republic of Turkey, without regard to its conflict of law provisions.
+Any legal action or proceeding arising under this Agreement shall be brought
+exclusively in the courts located in Istanbul, Turkey.
+
+================================================================================
+11. CONTACT INFORMATION
+================================================================================
+
+For licensing inquiries, permissions, or to report violations:
+
+    Yusuf Çalışır
+    LinkedIn: https://www.linkedin.com/in/yusufcalisir/
+    GitHub: https://github.com/yusufcalisir
+
+================================================================================
+12. ENTIRE AGREEMENT
+================================================================================
+
+This Agreement constitutes the entire agreement between you and the Licensor
+with respect to the Software and supersedes all prior or contemporaneous
+understandings regarding such subject matter.
+
+================================================================================
+
+BY USING THIS SOFTWARE, YOU ACKNOWLEDGE THAT YOU HAVE READ THIS AGREEMENT,
+UNDERSTAND IT, AND AGREE TO BE BOUND BY ITS TERMS AND CONDITIONS.
+
+Last Updated: January 2025

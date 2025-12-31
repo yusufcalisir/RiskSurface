@@ -32,9 +32,12 @@ export default function ProjectContextHeader({ title, projectId, className, isAn
 
             <div className="flex items-center justify-between gap-4 relative z-10">
                 <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                        <Terminal size={14} className="text-white/40 md:hidden" />
-                        <Terminal size={18} className="text-white/40 hidden md:block" />
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+                        <img
+                            src="/rs-logo.png"
+                            alt="RiskSurface"
+                            className="w-5 h-5 md:w-6 md:h-6 object-contain invert opacity-80"
+                        />
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1">

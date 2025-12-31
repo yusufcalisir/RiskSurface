@@ -210,7 +210,7 @@ export default function RealTopology({ projectId, onLoadingChange }: Props) {
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-3 md:gap-4">
                 <MetricCard
                     label="Sub-Domains"
                     value={metrics.subDomainsTracked.toString()}
@@ -245,21 +245,24 @@ export default function RealTopology({ projectId, onLoadingChange }: Props) {
                     Domain Clusters
                     <span className="text-xs font-normal text-muted">({clusters.length} detected)</span>
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:flex md:flex-wrap gap-4">
                     {clusters.map((cluster, i) => (
                         <motion.div
                             key={cluster.id}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.05 }}
-                            className={`p-4 rounded-xl border ${riskColors[cluster.riskLevel as keyof typeof riskColors] || riskColors.medium}`}
+                            className={`p-4 rounded-xl border ${riskColors[cluster.riskLevel as keyof typeof riskColors] || riskColors.medium} md:flex-1 md:min-w-[280px]`}
                         >
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                    <div className={`w-3 h-3 rounded-full ${languageColors[cluster.name] || languageColors.Other}`} />
-                                    <span className="font-bold text-white">{cluster.name}</span>
+                            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <div className={`w-3 h-3 rounded-full shrink-0 ${languageColors[cluster.name] || languageColors.Other}`} />
+                                    <span className="font-bold text-white truncate">{cluster.name}</span>
                                 </div>
-                                <span className="text-xs uppercase font-bold">{cluster.riskLevel}</span>
+                                <span className={`text-[10px] uppercase font-black tracking-tight shrink-0 ${cluster.riskLevel === 'Critical' || cluster.riskLevel === 'High' ? "text-risk-critical" : "text-white/40"
+                                    }`}>
+                                    {cluster.riskLevel}
+                                </span>
                             </div>
                             <div className="space-y-1 text-xs text-muted">
                                 <div className="flex justify-between">
@@ -287,7 +290,7 @@ export default function RealTopology({ projectId, onLoadingChange }: Props) {
                     Detected Modules
                     <span className="text-xs font-normal text-muted">({modules.length} top-level directories)</span>
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     {modules.slice(0, 16).map((mod, i) => (
                         <motion.div
                             key={mod.id}
@@ -368,10 +371,14 @@ function MetricCard({
     };
 
     return (
-        <div className={`rounded-xl p-3 md:p-4 bg-gradient-to-br ${colors[color]} border min-w-0`}>
+        <div className={`rounded-xl p-3 md:p-4 bg-gradient-to-br ${colors[color]} border min-w-0 md:flex-1 md:min-w-[150px] flex flex-col justify-between min-h-[120px] md:min-h-[140px] last:odd:col-span-2 md:last:col-span-1`}>
             <div className="text-[10px] text-muted uppercase tracking-wider font-bold mb-2 truncate">{label}</div>
-            <div className="text-xl md:text-2xl font-black text-white truncate">{value}</div>
-            <div className="text-[10px] text-muted mt-1 truncate">{description}</div>
+
+            <div className="flex-1 flex flex-col justify-center">
+                <div className="text-xl md:text-2xl font-black text-white truncate">{value}</div>
+            </div>
+
+            <div className="text-[10px] text-muted truncate">{description}</div>
         </div>
     );
 }

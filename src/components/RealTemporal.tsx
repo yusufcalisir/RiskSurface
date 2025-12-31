@@ -118,23 +118,29 @@ export default function RealTemporal({ projectId, onLoadingChange }: Props) {
             </div>
 
             {/* Summary Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="glass-panel rounded-2xl p-6 border border-white/10">
-                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Repository Baseline</div>
-                    <div className="text-4xl font-black text-white">{data.medianFrequency.toFixed(2)}</div>
-                    <div className="text-xs text-white/40 mt-1 font-medium">Median changes per file in window</div>
+            <div className="grid grid-cols-1 md:flex md:flex-wrap gap-6">
+                <div className="glass-panel rounded-2xl p-6 border border-white/10 min-w-0 flex flex-col justify-between min-h-[140px] md:min-h-[160px] md:flex-1 md:min-w-[280px]">
+                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1 truncate">Repository Baseline</div>
+                    <div className="flex-1 flex flex-col justify-center">
+                        <div className="text-2xl md:text-4xl font-black text-white truncate">{data.medianFrequency.toFixed(2)}</div>
+                    </div>
+                    <div className="text-[10px] text-white/40 mt-1 font-medium truncate">Median changes per file</div>
                 </div>
 
-                <div className="glass-panel rounded-2xl p-6 border border-white/10 bg-risk-medium/5">
-                    <div className="text-[10px] uppercase font-bold text-risk-medium tracking-widest mb-1">Unstable Modules</div>
-                    <div className="text-4xl font-black text-white">{data.temporalHotspots.length}</div>
-                    <div className="text-xs text-white/40 mt-1 font-medium">Files exceeding baseline instability</div>
+                <div className="glass-panel rounded-2xl p-6 border border-white/10 bg-risk-medium/5 min-w-0 flex flex-col justify-between min-h-[140px] md:min-h-[160px] md:flex-1 md:min-w-[280px]">
+                    <div className="text-[10px] uppercase font-bold text-risk-medium tracking-widest mb-1 truncate">Unstable Modules</div>
+                    <div className="flex-1 flex flex-col justify-center">
+                        <div className="text-2xl md:text-4xl font-black text-white truncate">{data.temporalHotspots.length}</div>
+                    </div>
+                    <div className="text-[10px] text-white/40 mt-1 font-medium truncate">Exceeding baseline instability</div>
                 </div>
 
-                <div className="glass-panel rounded-2xl p-6 border border-white/10">
-                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1">Analysis Window</div>
-                    <div className="text-4xl font-black text-white">{data.windowDays} Days</div>
-                    <div className="text-xs text-white/40 mt-1 font-medium">Rolling temporal scan depth</div>
+                <div className="glass-panel rounded-2xl p-6 border border-white/10 min-w-0 flex flex-col justify-between min-h-[140px] md:min-h-[160px] md:flex-1 md:min-w-[280px]">
+                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-1 truncate">Analysis Window</div>
+                    <div className="flex-1 flex flex-col justify-center">
+                        <div className="text-2xl md:text-4xl font-black text-white truncate">{data.windowDays} Days</div>
+                    </div>
+                    <div className="text-[10px] text-white/40 mt-1 font-medium truncate">Rolling temporal scan depth</div>
                 </div>
             </div>
 

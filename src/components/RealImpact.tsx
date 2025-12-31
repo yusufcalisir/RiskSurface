@@ -126,7 +126,7 @@ export default function RealImpact({ projectId, onLoadingChange }: Props) {
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-4">
                 <StatCard
                     label="Critical"
                     value={impact.criticalCount}
@@ -306,13 +306,17 @@ function StatCard({ label, value, color, icon: Icon, description }: {
     };
 
     return (
-        <div className={`rounded-2xl p-3 md:p-4 bg-gradient-to-br ${colors[color]} border`}>
+        <div className={`rounded-2xl p-3 md:p-4 bg-gradient-to-br ${colors[color]} border md:flex-1 md:min-w-[200px] min-w-0 flex flex-col justify-between min-h-[120px] md:min-h-[140px] last:odd:col-span-2 md:last:col-span-1`}>
             <div className="flex items-center gap-2 mb-2">
-                <Icon size={14} />
-                <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">{label}</span>
+                <Icon size={14} className="shrink-0" />
+                <span className="text-[9px] md:text-[10px] uppercase tracking-widest font-black text-white/40 truncate">{label}</span>
             </div>
-            <div className="text-3xl font-black text-white">{value}</div>
-            <div className="text-[10px] text-white/30 mt-1">{description}</div>
+
+            <div className="flex-1 flex flex-col justify-center">
+                <div className="text-xl md:text-3xl font-black text-white truncate leading-tight">{value}</div>
+            </div>
+
+            <div className="text-[9px] md:text-[10px] text-white/30 truncate leading-tight">{description}</div>
         </div>
     );
 }

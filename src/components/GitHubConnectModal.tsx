@@ -104,7 +104,7 @@ export default function GitHubConnectModal({ onConnect, onClose }: GitHubConnect
                     </div>
                 </motion.div>
 
-                {/* Left Arrow --> */}
+                {/* Left Arrow -> */}
                 <motion.div
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: "auto" }}
@@ -229,7 +229,7 @@ export default function GitHubConnectModal({ onConnect, onClose }: GitHubConnect
                     </div>
                 </motion.div>
 
-                {/* Right Arrow --> */}
+                {/* Right Arrow -> */}
                 <motion.div
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: "auto" }}

@@ -32,6 +32,22 @@ interface DependencyRecommendation {
     severity: 'critical' | 'high' | 'medium' | 'low';
 }
 
+interface RecommendationMetrics {
+    impactSeverity: number;
+    likelihood: number;
+    propagationPotential: number;
+    humanRiskFactor: number;
+    dataConfidence: number;
+}
+
+interface EvidenceChain {
+    triggeringMetric: string;
+    thresholdValue: number;
+    actualValue: number;
+    affectedScope: string;
+    projectKey: string;
+}
+
 interface ActionableRecommendation {
     type: 'refactor' | 'review' | 'redistribute' | 'update';
     target: string;
@@ -39,6 +55,9 @@ interface ActionableRecommendation {
     reason: string;
     severity: 'critical' | 'high' | 'medium' | 'low';
     impact: string;
+    priorityScore: number;
+    metrics: RecommendationMetrics;
+    evidence: EvidenceChain;
 }
 
 interface PredictiveAnalysis {
@@ -212,21 +231,42 @@ export const RecommendationCard: React.FC<Props> = ({ onTabChange }) => {
                                             {rec.type === 'review' && <ShieldAlert size={14} />}
                                             {rec.type === 'update' && <Package size={14} />}
                                         </div>
-                                        < span className="text-[11px] font-black text-white uppercase tracking-wider" > {rec.type} </span>
+                                        <span className="text-[11px] font-black text-white uppercase tracking-wider" > {rec.type}</span>
+                                        {/* Priority Rank Badge */}
+                                        <span className="text-[8px] font-mono text-white/30 bg-white/5 px-1.5 py-0.5 rounded">
+                                            #{idx + 1}
+                                        </span>
                                     </div>
-                                    < SeverityBadge severity={rec.severity} />
+                                    <div className="flex items-center gap-2">
+                                        {/* Priority Score */}
+                                        <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${rec.priorityScore >= 70 ? 'bg-red-500/20 text-red-400' :
+                                            rec.priorityScore >= 50 ? 'bg-orange-500/20 text-orange-400' :
+                                                'bg-blue-500/20 text-blue-400'
+                                            }`}>
+                                            {rec.priorityScore.toFixed(0)}
+                                        </span>
+                                        <SeverityBadge severity={rec.severity} />
+                                    </div>
                                 </div>
 
-                                < div className="text-xs font-bold text-white/90 mb-1 group-hover:text-white transition-colors" >
+                                <div className="text-xs font-bold text-white/90 mb-1 group-hover:text-white transition-colors" >
                                     {rec.targetName}
                                 </div>
-                                < p className="text-[10px] text-white/50 leading-relaxed italic mb-3" >
+                                <p className="text-[10px] text-white/50 leading-relaxed italic mb-3" >
                                     {rec.reason}
                                 </p>
 
-                                < div className="flex items-center justify-between pt-3 border-t border-white/5" >
-                                    <span className="text-[9px] font-bold text-white/30 uppercase italic" > {rec.impact} </span>
-                                    < ChevronRight size={12} className="text-white/20 group-hover:text-white/60 group-hover:translate-x-1 transition-all" />
+                                {/* Low Confidence Warning */}
+                                {rec.metrics?.dataConfidence < 0.6 && (
+                                    <div className="flex items-center gap-1.5 mb-3 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                                        <Info size={10} className="text-yellow-400" />
+                                        <span className="text-[8px] text-yellow-400/80 font-bold uppercase">Limited data confidence</span>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-between pt-3 border-t border-white/5" >
+                                    <span className="text-[9px] font-bold text-white/30 uppercase italic" > {rec.impact}</span>
+                                    <ChevronRight size={12} className="text-white/20 group-hover:text-white/60 group-hover:translate-x-1 transition-all" />
                                 </div>
 
                                 {/* Accent line */}

@@ -94,6 +94,46 @@ RiskSurface is engineered for tactical deployment on any device.
 * **Intelligent Truncation**: Precision font scaling and truncation for deep file systems.
 * **Touch-Ready Controls**: High-fidelity interactions optimized for mobile and desktop parity.
 
+---
+
+## 🧠 INTELLIGENCE LAYER | PRODUCTION-GRADE ANALYTICS
+
+### Deterministic Analysis Engine
+Every metric is reproducible and traceable. The same repository state always produces identical results.
+* **Snapshot Versioning**: Each analysis is uniquely identified by commit SHA and manifest hash.
+* **Metric Immutability**: Finalized snapshots cannot be retroactively altered.
+* **Anti-Fabrication Guarantees**: No placeholder values, no static defaults, no approximations.
+
+### Observability and Performance Tracing
+Section-level performance attribution for diagnosing latency and bottlenecks.
+* **Fetch vs Compute Attribution**: Know exactly where time is spent.
+* **Cache Hit/Miss Tracking**: Understand when data is served from cache.
+* **Cold Start Detection**: Distinguish between fresh and warm execution.
+
+### Explainability Layer
+Every computed metric includes data-backed explanations.
+* **Traceable Metrics**: Hover or tap to see data sources, commit ranges, and computation logic.
+* **Contextual Insights**: Explanations change with the underlying data.
+* **Transparency First**: Users understand what they are seeing and why.
+
+### Failure-Tolerant UX
+Graceful degradation without breaking the entire interface.
+* **Metric-Level Isolation**: Individual failures do not cascade.
+* **Explicit Unavailability**: Clear messaging when data is insufficient.
+* **Retry Affordance**: Users can recover from transient failures.
+
+### Data Integrity Contracts
+Strict validation before any metric is rendered.
+* **Required Sources Validation**: Metrics declare their dependencies.
+* **Completeness Thresholds**: Minimum data coverage enforced.
+* **Cross-Section Consistency**: Related metrics must agree.
+
+### Progressive Disclosure
+Hierarchical information exposure reduces cognitive load.
+* **Primary Signals First**: High-level risk visible immediately.
+* **Secondary Context Expandable**: Supporting metrics on demand.
+* **Deep Details Available**: Full file and commit lists accessible.
+
 ## 🛠️ THE WAR ROOM SETUP | INSTALLATION PROTOCOL
 
 Follow this specific sequence to deploy the platform on your station:

@@ -221,7 +221,7 @@ export default function RealDependencies({ projectId, onLoadingChange }: Props) 
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-[10px] uppercase font-bold text-white/20 md:hidden">Latest:</span>
-                                            <span className="font-mono text-xs text-cyan-400/40 px-1.5 py-0.5 rounded leading-none">{dep.latestVersion || '—'}</span>
+                                            <span className="font-mono text-xs text-cyan-400/40 px-1.5 py-0.5 rounded leading-none">{dep.latestVersion || '-'}</span>
                                         </div>
                                     </div>
 

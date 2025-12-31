@@ -44,3 +44,13 @@ build_log.txt
 /server/check_api.json
 /server/vendor/
 
+# Artifacts and temporary files
+*.tmp
+*.temp
+.cache/
+.parcel-cache/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

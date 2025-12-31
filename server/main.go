@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -158,6 +159,395 @@ type RepoAnalysis struct {
 	SecurityAnalysis  *SecurityConsistencyAnalysis `json:"securityAnalysis,omitempty"`
 }
 
+// ==================== ANALYSIS CONFIDENCE TYPES ====================
+
+type AnalysisConfidence struct {
+	SampleScore     float64 `json:"sampleScore"`     // 0-100: Based on commit/file count
+	TemporalScore   float64 `json:"temporalScore"`   // 0-100: Based on time coverage
+	StructuralScore float64 `json:"structuralScore"` // 0-100: Based on tree completeness
+	Overall         float64 `json:"overall"`         // 0-1: Weighted average
+	Explanation     string  `json:"explanation"`     // Human-readable confidence explanation
+}
+
+// ==================== TEMPORAL MEMORY TYPES ====================
+
+type AnalysisInputHashes struct {
+	CommitWindowHash   string `json:"commitWindowHash"`
+	DependencyHash     string `json:"dependencyHash"`
+	ContributorSetHash string `json:"contributorSetHash"`
+	TreeStructureHash  string `json:"treeStructureHash"`
+}
+
+type BaselineMetrics struct {
+	RiskScore          float64 `json:"riskScore"`
+	ConcentrationIndex float64 `json:"concentrationIndex"`
+	BusFactor          int     `json:"busFactor"`
+	DependencyHealth   float64 `json:"dependencyHealth"`
+	TopologyEntropy    float64 `json:"topologyEntropy"`
+}
+
+type TemporalDeltaSet struct {
+	VelocityDelta      float64 `json:"velocityDelta"`
+	ConcentrationDrift float64 `json:"concentrationDrift"`
+	OwnershipShift     float64 `json:"ownershipShift"`
+	EntropyChange      float64 `json:"entropyChange"`
+	PreviousRiskScore  float64 `json:"previousRiskScore"`
+	IsBaseline         bool    `json:"isBaseline"`
+	// Self-benchmarking fields
+	RiskDelta          float64 `json:"riskDelta"`          // Current - Baseline
+	ConcentrationDelta float64 `json:"concentrationDelta"` // Current - Baseline
+	BusFactorDelta     int     `json:"busFactorDelta"`     // Current - Baseline
+	DependencyDelta    float64 `json:"dependencyDelta"`    // Current - Baseline
+	Direction          string  `json:"direction"`          // improved, stable, degraded
+	Significance       string  `json:"significance"`       // major, minor, negligible
+}
+
+type ProjectAnalysisState struct {
+	ProjectKey      string              `json:"projectKey"`
+	LastAnalyzedAt  time.Time           `json:"lastAnalyzedAt"`
+	BaselineSetAt   time.Time           `json:"baselineSetAt,omitempty"`
+	InputHashes     AnalysisInputHashes `json:"inputHashes"`
+	TemporalDeltas  TemporalDeltaSet    `json:"temporalDeltas"`
+	BaselineMetrics BaselineMetrics     `json:"baselineMetrics"` // Stored baseline
+	CurrentMetrics  BaselineMetrics     `json:"currentMetrics"`  // Current snapshot
+}
+
+// In-memory cache for project analysis states
+var projectStateCache = make(map[string]*ProjectAnalysisState)
+var projectStateMutex sync.RWMutex
+
+// ==================== SECTION RESPONSE CACHING ====================
+
+type SectionCacheEntry struct {
+	Data       interface{} `json:"data"`
+	CachedAt   time.Time   `json:"cachedAt"`
+	ProjectKey string      `json:"projectKey"`
+	InputHash  string      `json:"inputHash"`
+}
+
+// Cache TTL: 5 minutes
+const CACHE_TTL = 5 * time.Minute
+
+var sectionCache = make(map[string]*SectionCacheEntry)
+var sectionCacheMutex sync.RWMutex
+
+// getCachedSection retrieves cached section data if valid
+func getCachedSection(cacheKey string) (interface{}, bool) {
+	sectionCacheMutex.RLock()
+	defer sectionCacheMutex.RUnlock()
+
+	entry, exists := sectionCache[cacheKey]
+	if !exists {
+		return nil, false
+	}
+
+	// Check TTL
+	if time.Since(entry.CachedAt) > CACHE_TTL {
+		return nil, false
+	}
+
+	return entry.Data, true
+}
+
+// setCachedSection stores section data in cache
+func setCachedSection(cacheKey string, data interface{}, projectKey, inputHash string) {
+	sectionCacheMutex.Lock()
+	defer sectionCacheMutex.Unlock()
+
+	sectionCache[cacheKey] = &SectionCacheEntry{
+		Data:       data,
+		CachedAt:   time.Now(),
+		ProjectKey: projectKey,
+		InputHash:  inputHash,
+	}
+	log.Printf("[Cache] Stored section cache for %s", cacheKey)
+}
+
+// ==================== REPOSITORY ANALYSIS CACHE ====================
+
+type RepositoryAnalysisCache struct {
+	ProjectKey      string                 `json:"projectKey"`
+	LastComputedAt  time.Time              `json:"lastComputedAt"`
+	InputHash       string                 `json:"inputHash"`
+	EndCommitSHA    string                 `json:"endCommitSha"`    // Snapshot identity: end commit
+	ManifestHash    string                 `json:"manifestHash"`    // Snapshot identity: deps hash
+	SnapshotVersion int                    `json:"snapshotVersion"` // Incremented on recompute
+	Status          string                 `json:"status"`          // ready, outdated, computing
+	MetricVersion   string                 `json:"metricVersion"`   // e.g., "v1.2.0" - stable across snapshot
+	ComputeLogic    string                 `json:"computeLogic"`    // Hash of computation logic
+	Immutable       bool                   `json:"immutable"`       // True once snapshot is finalized
+	Trajectory      *TrajectoryAnalysis    `json:"trajectory"`
+	Dependencies    *DependencyAnalysis    `json:"dependencies"`
+	Concentration   *ConcentrationAnalysis `json:"concentration"`
+	IsComputing     bool                   `json:"isComputing"`
+}
+
+// Current metric version - bump when computation logic changes
+const CURRENT_METRIC_VERSION = "v1.0.0"
+
+// Repository-level cache with 5-minute TTL
+const REPO_CACHE_TTL = 5 * time.Minute
+
+var repoAnalysisCache = make(map[string]*RepositoryAnalysisCache)
+var repoAnalysisMutex sync.RWMutex
+
+// getRepoCache retrieves cached repository analysis if valid
+func getRepoCache(projectKey string) (*RepositoryAnalysisCache, bool) {
+	repoAnalysisMutex.RLock()
+	defer repoAnalysisMutex.RUnlock()
+
+	cache, exists := repoAnalysisCache[projectKey]
+	if !exists {
+		return nil, false
+	}
+
+	// Check TTL
+	if time.Since(cache.LastComputedAt) > REPO_CACHE_TTL {
+		return nil, false
+	}
+
+	// Don't return if still computing
+	if cache.IsComputing {
+		return cache, false // Return cache state but indicate not ready
+	}
+
+	return cache, true
+}
+
+// setRepoCache stores or updates repository analysis cache
+func setRepoCache(projectKey string, cache *RepositoryAnalysisCache) {
+	repoAnalysisMutex.Lock()
+	defer repoAnalysisMutex.Unlock()
+
+	cache.LastComputedAt = time.Now()
+	repoAnalysisCache[projectKey] = cache
+	log.Printf("[RepoCache] Stored analysis cache for %s (computing: %v)", projectKey, cache.IsComputing)
+}
+
+// markRepoComputing marks a repository as currently computing
+func markRepoComputing(projectKey string) {
+	repoAnalysisMutex.Lock()
+	defer repoAnalysisMutex.Unlock()
+
+	if cache, exists := repoAnalysisCache[projectKey]; exists {
+		cache.IsComputing = true
+	} else {
+		repoAnalysisCache[projectKey] = &RepositoryAnalysisCache{
+			ProjectKey:  projectKey,
+			IsComputing: true,
+		}
+	}
+}
+
+// getPrewarmedSnapshot returns cached data immediately for fast tab switches
+func getPrewarmedSnapshot(projectKey string) (*RepositoryAnalysisCache, string) {
+	repoAnalysisMutex.RLock()
+	defer repoAnalysisMutex.RUnlock()
+
+	cache, exists := repoAnalysisCache[projectKey]
+	if !exists {
+		return nil, "no_cache"
+	}
+
+	if cache.IsComputing {
+		return cache, "computing"
+	}
+
+	if time.Since(cache.LastComputedAt) > REPO_CACHE_TTL {
+		return cache, "stale"
+	}
+
+	return cache, "ready"
+}
+
+// isAnalysisReady checks if analysis is complete and not stale
+func isAnalysisReady(projectKey string) bool {
+	repoAnalysisMutex.RLock()
+	defer repoAnalysisMutex.RUnlock()
+
+	cache, exists := repoAnalysisCache[projectKey]
+	if !exists {
+		return false
+	}
+
+	return !cache.IsComputing && time.Since(cache.LastComputedAt) <= REPO_CACHE_TTL
+}
+
+// ==================== WEAK SIGNAL DETECTION TYPES ====================
+
+type WeakSignal struct {
+	ID            string   `json:"id"`            // Unique signal identifier
+	Category      string   `json:"category"`      // ownership_drift, churn_acceleration, dependency_stagnation, topology_creep
+	Section       string   `json:"section"`       // trajectory, concentration, dependencies, topology
+	Indicators    []string `json:"indicators"`    // List of contributing signals
+	Confidence    float64  `json:"confidence"`    // 0-1, multi-signal correlation strength
+	TrendDuration int      `json:"trendDuration"` // Days signal has been consistent
+	Description   string   `json:"description"`   // Cautious, non-alarmist language
+}
+
+type ArchitecturalIntent struct {
+	Tendency       string   `json:"tendency"`       // modularization, consolidation, boundary_hardening, etc.
+	SignalStrength float64  `json:"signalStrength"` // 0-1 metric magnitude
+	Indicators     []string `json:"indicators"`     // Contributing signals
+	Confidence     float64  `json:"confidence"`     // Temporal consistency, reduced by competing patterns
+	Description    string   `json:"description"`    // Pattern-aligned tendency, never declarative
+}
+
+type InsightExplainability struct {
+	InsightID           string   `json:"insightId"`           // Unique identifier
+	DataSources         []string `json:"dataSources"`         // Raw data points
+	IntermediateMetrics []string `json:"intermediateMetrics"` // Computed values
+	FinalInsight        string   `json:"finalInsight"`        // Displayed conclusion
+	Coverage            float64  `json:"coverage"`            // 0-1 data coverage quality
+	SignalStrength      float64  `json:"signalStrength"`      // 0-1
+	BlindSpots          []string `json:"blindSpots"`          // Known gaps
+	Reproducible        bool     `json:"reproducible"`        // Deterministic chain
+}
+
+// ==================== DATA INTEGRITY CONTRACTS ====================
+
+type MetricDataContract struct {
+	MetricID             string   `json:"metricId"`
+	RequiredSources      []string `json:"requiredSources"`      // commits, files, deps, contributors
+	MinCompletenessRatio float64  `json:"minCompletenessRatio"` // 0-1, minimum data coverage
+	ComputationValid     bool     `json:"computationValid"`     // All conditions met
+	ValidationErrors     []string `json:"validationErrors"`     // What failed
+}
+
+// validateMetricContract checks if a metric can be computed with current data
+func validateMetricContract(contract MetricDataContract, availableSources []string, completeness float64) MetricDataContract {
+	contract.ValidationErrors = []string{}
+	contract.ComputationValid = true
+
+	// Check required sources
+	for _, required := range contract.RequiredSources {
+		found := false
+		for _, available := range availableSources {
+			if available == required {
+				found = true
+				break
+			}
+		}
+		if !found {
+			contract.ValidationErrors = append(contract.ValidationErrors, fmt.Sprintf("Missing source: %s", required))
+			contract.ComputationValid = false
+		}
+	}
+
+	// Check completeness threshold
+	if completeness < contract.MinCompletenessRatio {
+		contract.ValidationErrors = append(contract.ValidationErrors, fmt.Sprintf("Insufficient data: %.0f%% < %.0f%% required", completeness*100, contract.MinCompletenessRatio*100))
+		contract.ComputationValid = false
+	}
+
+	return contract
+}
+
+// createMetricContract creates a contract for a specific metric
+func createMetricContract(metricID string, sources []string, minCompleteness float64) MetricDataContract {
+	return MetricDataContract{
+		MetricID:             metricID,
+		RequiredSources:      sources,
+		MinCompletenessRatio: minCompleteness,
+		ComputationValid:     false,
+		ValidationErrors:     []string{},
+	}
+}
+
+// ==================== OBSERVABILITY & PERFORMANCE TRACING ====================
+
+type SectionTiming struct {
+	SectionName   string        `json:"sectionName"`
+	FetchDuration time.Duration `json:"fetchDuration"`
+	ComputeTime   time.Duration `json:"computeTime"`
+	TotalTime     time.Duration `json:"totalTime"`
+	CacheHit      bool          `json:"cacheHit"`
+}
+
+type AnalysisTrace struct {
+	ProjectKey     string          `json:"projectKey"`
+	TraceID        string          `json:"traceId"`
+	StartedAt      time.Time       `json:"startedAt"`
+	CompletedAt    time.Time       `json:"completedAt"`
+	TotalDuration  time.Duration   `json:"totalDuration"`
+	Environment    string          `json:"environment"` // localhost, production
+	IsColdStart    bool            `json:"isColdStart"`
+	SectionTimings []SectionTiming `json:"sectionTimings"`
+	FailedSections []string        `json:"failedSections"`
+	RetryAttempts  int             `json:"retryAttempts"`
+	RateLimitHit   bool            `json:"rateLimitHit"`
+	SnapshotReused bool            `json:"snapshotReused"`
+}
+
+var analysisTraces = make(map[string]*AnalysisTrace)
+var analysisTracesMutex sync.RWMutex
+
+// startAnalysisTrace begins tracing for a repository analysis
+func startAnalysisTrace(projectKey string) *AnalysisTrace {
+	trace := &AnalysisTrace{
+		ProjectKey:     projectKey,
+		TraceID:        fmt.Sprintf("%s-%d", projectKey, time.Now().UnixNano()),
+		StartedAt:      time.Now(),
+		Environment:    "production", // Default, can be overridden
+		SectionTimings: []SectionTiming{},
+		FailedSections: []string{},
+	}
+
+	analysisTracesMutex.Lock()
+	analysisTraces[projectKey] = trace
+	analysisTracesMutex.Unlock()
+
+	log.Printf("[Trace] Started analysis trace for %s", projectKey)
+	return trace
+}
+
+// recordSectionTiming adds timing data for a section
+func recordSectionTiming(projectKey, sectionName string, fetchDur, computeDur time.Duration, cacheHit bool) {
+	analysisTracesMutex.Lock()
+	defer analysisTracesMutex.Unlock()
+
+	trace, exists := analysisTraces[projectKey]
+	if !exists {
+		return
+	}
+
+	trace.SectionTimings = append(trace.SectionTimings, SectionTiming{
+		SectionName:   sectionName,
+		FetchDuration: fetchDur,
+		ComputeTime:   computeDur,
+		TotalTime:     fetchDur + computeDur,
+		CacheHit:      cacheHit,
+	})
+}
+
+// completeAnalysisTrace finalizes the trace
+func completeAnalysisTrace(projectKey string) {
+	analysisTracesMutex.Lock()
+	defer analysisTracesMutex.Unlock()
+
+	trace, exists := analysisTraces[projectKey]
+	if !exists {
+		return
+	}
+
+	trace.CompletedAt = time.Now()
+	trace.TotalDuration = trace.CompletedAt.Sub(trace.StartedAt)
+	log.Printf("[Trace] Completed %s in %v (sections: %d, failures: %d)",
+		projectKey, trace.TotalDuration, len(trace.SectionTimings), len(trace.FailedSections))
+}
+
+type FailureScenario struct {
+	TargetID           string   `json:"targetId"`           // Component being removed
+	TargetType         string   `json:"targetType"`         // dependency, module, contributor
+	TargetName         string   `json:"targetName"`         // Human-readable name
+	AffectedDomains    []string `json:"affectedDomains"`    // Downstream impact
+	BlastRadius        int      `json:"blastRadius"`        // Count of affected nodes
+	OwnershipStress    float64  `json:"ownershipStress"`    // 0-1 knowledge concentration
+	RecoveryComplexity string   `json:"recoveryComplexity"` // low, medium, high
+	Confidence         float64  `json:"confidence"`         // Simulation certainty
+	Description        string   `json:"description"`        // Conditional phrasing
+}
+
 // ==================== PREDICTIVE ANALYTICS TYPES ====================
 
 type RiskProjection struct {
@@ -187,13 +577,32 @@ type DependencyRecommendation struct {
 	Severity   string `json:"severity"` // critical, high, medium, low
 }
 
+type RecommendationMetrics struct {
+	ImpactSeverity       float64 `json:"impactSeverity"`       // 0-100: system-wide damage potential
+	Likelihood           float64 `json:"likelihood"`           // 0-100: probability of risk materializing
+	PropagationPotential float64 `json:"propagationPotential"` // 0-100: blast radius factor
+	HumanRiskFactor      float64 `json:"humanRiskFactor"`      // 0-100: bus factor weight
+	DataConfidence       float64 `json:"dataConfidence"`       // 0-1: low = insufficient data
+}
+
+type EvidenceChain struct {
+	TriggeringMetric string  `json:"triggeringMetric"` // e.g., "riskProjection.projectedRisk"
+	ThresholdValue   float64 `json:"thresholdValue"`   // e.g., 60.0
+	ActualValue      float64 `json:"actualValue"`      // e.g., 72.5
+	AffectedScope    string  `json:"affectedScope"`    // e.g., "src/components/"
+	ProjectKey       string  `json:"projectKey"`       // For anti-fake enforcement
+}
+
 type ActionableRecommendation struct {
-	Type       string `json:"type"`   // refactor, review, redistribute, update
-	Target     string `json:"target"` // module/file path
-	TargetName string `json:"targetName"`
-	Reason     string `json:"reason"`
-	Severity   string `json:"severity"` // critical, high, medium, low
-	Impact     string `json:"impact"`   // description of potential impact
+	Type          string                `json:"type"`   // refactor, review, redistribute, update
+	Target        string                `json:"target"` // module/file path
+	TargetName    string                `json:"targetName"`
+	Reason        string                `json:"reason"`        // Causal: "Because X exceeds Y..."
+	Severity      string                `json:"severity"`      // critical, high, medium, low
+	Impact        string                `json:"impact"`        // Action: "Schedule/Initiate/Review..."
+	PriorityScore float64               `json:"priorityScore"` // Computed score for sorting
+	Metrics       RecommendationMetrics `json:"metrics"`       // Explainable data backing
+	Evidence      EvidenceChain         `json:"evidence"`      // Evidence chain for traceability
 }
 
 type PredictiveAnalysis struct {
@@ -230,6 +639,7 @@ type TrajectoryAnalysis struct {
 	TotalWeeks      int                  `json:"totalWeeks"`
 	PeakRiskWeek    string               `json:"peakRiskWeek,omitempty"`
 	PeakRiskScore   float64              `json:"peakRiskScore"`
+	Confidence      *AnalysisConfidence  `json:"confidence,omitempty"`
 }
 
 // ==================== IMPACT & EXPOSURE TYPES ====================
@@ -248,16 +658,17 @@ type ImpactUnit struct {
 }
 
 type ImpactAnalysis struct {
-	Available     bool         `json:"available"`
-	Reason        string       `json:"reason,omitempty"`
-	ImpactUnits   []ImpactUnit `json:"impactUnits"`
-	TotalModules  int          `json:"totalModules"`
-	CriticalCount int          `json:"criticalCount"` // fragility >= 75
-	HighCount     int          `json:"highCount"`     // fragility >= 50
-	MediumCount   int          `json:"mediumCount"`   // fragility >= 25
-	LowCount      int          `json:"lowCount"`      // fragility < 25
-	MostFragile   string       `json:"mostFragile,omitempty"`
-	LargestBlast  string       `json:"largestBlast,omitempty"`
+	Available     bool                `json:"available"`
+	Reason        string              `json:"reason,omitempty"`
+	ImpactUnits   []ImpactUnit        `json:"impactUnits"`
+	TotalModules  int                 `json:"totalModules"`
+	CriticalCount int                 `json:"criticalCount"` // fragility >= 75
+	HighCount     int                 `json:"highCount"`     // fragility >= 50
+	MediumCount   int                 `json:"mediumCount"`   // fragility >= 25
+	LowCount      int                 `json:"lowCount"`      // fragility < 25
+	MostFragile   string              `json:"mostFragile,omitempty"`
+	LargestBlast  string              `json:"largestBlast,omitempty"`
+	Confidence    *AnalysisConfidence `json:"confidence,omitempty"`
 }
 
 // ==================== CHANGE CONCENTRATION TYPES ====================
@@ -269,14 +680,15 @@ type ChurnFile struct {
 }
 
 type ConcentrationAnalysis struct {
-	Available            bool               `json:"available"`
-	Reason               string             `json:"reason,omitempty"`
-	Window               string             `json:"window"` // 7d, 30d, all
-	TotalCommitsAnalyzed int                `json:"totalCommitsAnalyzed"`
-	TotalFilesTouched    int                `json:"totalFilesTouched"`
-	ConcentrationIndex   float64            `json:"concentrationIndex"` // 0-100%
-	Hotspots             []ChurnFile        `json:"hotspots"`
-	OwnershipRisk        *BusFactorAnalysis `json:"ownershipRisk,omitempty"`
+	Available            bool                `json:"available"`
+	Reason               string              `json:"reason,omitempty"`
+	Window               string              `json:"window"` // 7d, 30d, all
+	TotalCommitsAnalyzed int                 `json:"totalCommitsAnalyzed"`
+	TotalFilesTouched    int                 `json:"totalFilesTouched"`
+	ConcentrationIndex   float64             `json:"concentrationIndex"` // 0-100%
+	Hotspots             []ChurnFile         `json:"hotspots"`
+	OwnershipRisk        *BusFactorAnalysis  `json:"ownershipRisk,omitempty"`
+	Confidence           *AnalysisConfidence `json:"confidence,omitempty"`
 }
 
 // ==================== BUS FACTOR TYPES ====================
@@ -1504,6 +1916,7 @@ func analyzeTrajectory(client *GitHubClient, owner, repo string) *TrajectoryAnal
 		TotalWeeks:      len(snapshots),
 		PeakRiskWeek:    peakRiskWeek,
 		PeakRiskScore:   peakRiskScore,
+		Confidence:      computeAnalysisConfidence(totalCommits, 0, len(snapshots), false),
 	}
 }
 
@@ -2402,7 +2815,7 @@ func analyzePredictions(client *GitHubClient, owner, repo string, trajectory *Tr
 	}
 
 	// 4. Generate Actionable Recommendations
-	predictions.Recommendations = generateActionableRecommendations(predictions)
+	predictions.Recommendations = generateActionableRecommendations(predictions, concentration, deps)
 
 	log.Printf("[Predictions] Generated %d bus factor warnings, %d dep recommendations, %d actions",
 		len(predictions.BusFactorWarnings),
@@ -2562,58 +2975,628 @@ func generateDependencyRecommendations(deps *DependencyAnalysis) []DependencyRec
 	return recommendations
 }
 
-// generateActionableRecommendations creates high-level recommendations from all predictions
-func generateActionableRecommendations(predictions *PredictiveAnalysis) []ActionableRecommendation {
+// computePriorityScore calculates a weighted priority score from recommendation metrics
+func computePriorityScore(m RecommendationMetrics) float64 {
+	// Weights: ImpactSeverity 40%, Likelihood 25%, Propagation 20%, HumanRisk 15%
+	return (m.ImpactSeverity * 0.4) + (m.Likelihood * 0.25) + (m.PropagationPotential * 0.2) + (m.HumanRiskFactor * 0.15)
+}
+
+// generateActionableRecommendations creates prioritized, data-driven recommendations
+func generateActionableRecommendations(predictions *PredictiveAnalysis, concentration *ConcentrationAnalysis, deps *DependencyAnalysis) []ActionableRecommendation {
 	recommendations := make([]ActionableRecommendation, 0)
 
-	// From risk projection
-	if predictions.RiskProjection != nil && predictions.RiskProjection.Available {
+	// Track data availability for confidence scoring
+	hasTrajectory := predictions.RiskProjection != nil && predictions.RiskProjection.Available
+	hasConcentration := concentration != nil && concentration.Available
+	hasDeps := deps != nil && deps.Available
+
+	// 1. Risk Trajectory Recommendation
+	if hasTrajectory {
 		rp := predictions.RiskProjection
-		if rp.Trend == "increasing" && rp.ProjectedRisk > 60 {
+		if rp.Trend == "increasing" && rp.ProjectedRisk > 50 {
+			metrics := RecommendationMetrics{
+				ImpactSeverity:       math.Min(rp.ProjectedRisk, 100),
+				Likelihood:           math.Min(rp.Confidence*100, 100),
+				PropagationPotential: math.Min(rp.TrendMagnitude*10, 100),
+				HumanRiskFactor:      0, // Not human-related
+				DataConfidence:       rp.Confidence,
+			}
+			severity := "medium"
+			if rp.ProjectedRisk > 75 {
+				severity = "critical"
+			} else if rp.ProjectedRisk > 60 {
+				severity = "high"
+			}
 			recommendations = append(recommendations, ActionableRecommendation{
-				Type:       "refactor",
-				Target:     "high-churn-modules",
-				TargetName: "High-churn modules",
-				Reason:     fmt.Sprintf("Risk projected to increase from %.1f to %.1f", rp.CurrentRisk, rp.ProjectedRisk),
-				Severity:   "high",
-				Impact:     "Reduce technical debt accumulation",
+				Type:          "refactor",
+				Target:        "high-churn-modules",
+				TargetName:    "High-Churn Modules",
+				Reason:        fmt.Sprintf("Because projected risk (%.1f) exceeds threshold 50, with trajectory increasing at %.1fx rate", rp.ProjectedRisk, rp.TrendMagnitude),
+				Severity:      severity,
+				Impact:        "Schedule refactoring sprint for high-churn modules before next release",
+				PriorityScore: computePriorityScore(metrics),
+				Metrics:       metrics,
+				Evidence: EvidenceChain{
+					TriggeringMetric: "riskProjection.projectedRisk",
+					ThresholdValue:   50.0,
+					ActualValue:      rp.ProjectedRisk,
+					AffectedScope:    "high-churn-modules",
+					ProjectKey:       "",
+				},
 			})
 		}
 	}
 
-	// From bus factor warnings
+	// 2. Bus Factor / Ownership Concentration Recommendations
 	for _, warning := range predictions.BusFactorWarnings {
-		if warning.Severity == "critical" {
-			recommendations = append(recommendations, ActionableRecommendation{
-				Type:       "redistribute",
-				Target:     warning.ModulePath,
-				TargetName: warning.ModuleName,
-				Reason:     fmt.Sprintf("%.1f%% ownership concentration", warning.OwnershipPercent),
-				Severity:   "critical",
-				Impact:     "Reduce single-point-of-failure risk",
-			})
+		humanRisk := math.Min(warning.OwnershipPercent, 100)
+		metrics := RecommendationMetrics{
+			ImpactSeverity:       humanRisk * 0.8, // Single-owner modules are high impact
+			Likelihood:           70,              // Knowledge silos are persistent
+			PropagationPotential: 50,              // Moderate blast radius
+			HumanRiskFactor:      humanRisk,
+			DataConfidence:       0.9, // Ownership data is reliable
 		}
-	}
-
-	// From dependency recommendations
-	criticalDeps := 0
-	for _, dep := range predictions.DependencyRecommendations {
-		if dep.Severity == "critical" {
-			criticalDeps++
+		severity := warning.Severity
+		if severity == "" {
+			if humanRisk > 80 {
+				severity = "critical"
+			} else if humanRisk > 60 {
+				severity = "high"
+			} else {
+				severity = "medium"
+			}
 		}
-	}
-	if criticalDeps > 0 {
 		recommendations = append(recommendations, ActionableRecommendation{
-			Type:       "update",
-			Target:     "dependencies",
-			TargetName: "External dependencies",
-			Reason:     fmt.Sprintf("%d dependencies need urgent updates", criticalDeps),
-			Severity:   "critical",
-			Impact:     "Address potential security vulnerabilities",
+			Type:          "redistribute",
+			Target:        warning.ModulePath,
+			TargetName:    warning.ModuleName,
+			Reason:        fmt.Sprintf("Because ownership concentration (%.1f%%) exceeds 50%% threshold for %s, knowledge silo risk is elevated", warning.OwnershipPercent, warning.ModuleName),
+			Severity:      severity,
+			Impact:        "Initiate knowledge transfer sessions and code review pairing for this module",
+			PriorityScore: computePriorityScore(metrics),
+			Metrics:       metrics,
+			Evidence: EvidenceChain{
+				TriggeringMetric: "busFactorWarning.ownershipPercent",
+				ThresholdValue:   50.0,
+				ActualValue:      warning.OwnershipPercent,
+				AffectedScope:    warning.ModulePath,
+				ProjectKey:       "",
+			},
 		})
 	}
 
+	// 3. Dependency Update Recommendations (aggregate critical deps)
+	if hasDeps {
+		criticalDeps := 0
+		highDeps := 0
+		for _, dep := range predictions.DependencyRecommendations {
+			if dep.Severity == "critical" {
+				criticalDeps++
+			} else if dep.Severity == "high" {
+				highDeps++
+			}
+		}
+		if criticalDeps > 0 {
+			metrics := RecommendationMetrics{
+				ImpactSeverity:       90, // Security vulnerabilities are high impact
+				Likelihood:           80, // Outdated deps are actively exploitable
+				PropagationPotential: math.Min(float64(deps.MaxFanIn)*5, 100),
+				HumanRiskFactor:      0,
+				DataConfidence:       0.85,
+			}
+			recommendations = append(recommendations, ActionableRecommendation{
+				Type:          "update",
+				Target:        "dependencies",
+				TargetName:    "External Dependencies",
+				Reason:        fmt.Sprintf("Because %d dependencies are major versions behind, security vulnerability exposure is elevated", criticalDeps),
+				Severity:      "critical",
+				Impact:        "Queue immediate dependency updates in next sprint to patch vulnerabilities",
+				PriorityScore: computePriorityScore(metrics),
+				Metrics:       metrics,
+				Evidence: EvidenceChain{
+					TriggeringMetric: "dependencyAnalysis.criticalCount",
+					ThresholdValue:   1.0,
+					ActualValue:      float64(criticalDeps),
+					AffectedScope:    "package.json / go.mod",
+					ProjectKey:       "",
+				},
+			})
+		}
+		if highDeps > 0 && criticalDeps == 0 {
+			metrics := RecommendationMetrics{
+				ImpactSeverity:       60,
+				Likelihood:           50,
+				PropagationPotential: math.Min(float64(deps.MaxFanIn)*3, 100),
+				HumanRiskFactor:      0,
+				DataConfidence:       0.8,
+			}
+			recommendations = append(recommendations, ActionableRecommendation{
+				Type:          "update",
+				Target:        "dependencies",
+				TargetName:    "External Dependencies",
+				Reason:        fmt.Sprintf("Because %d dependencies are minor versions behind, technical debt is accumulating", highDeps),
+				Severity:      "high",
+				Impact:        "Schedule dependency updates within next 2 sprints",
+				PriorityScore: computePriorityScore(metrics),
+				Metrics:       metrics,
+				Evidence: EvidenceChain{
+					TriggeringMetric: "dependencyAnalysis.highCount",
+					ThresholdValue:   1.0,
+					ActualValue:      float64(highDeps),
+					AffectedScope:    "package.json / go.mod",
+					ProjectKey:       "",
+				},
+			})
+		}
+	}
+
+	// 4. Concentration Hotspot Recommendations
+	if hasConcentration && concentration.ConcentrationIndex > 40 {
+		metrics := RecommendationMetrics{
+			ImpactSeverity:       math.Min(concentration.ConcentrationIndex, 100),
+			Likelihood:           60,
+			PropagationPotential: 70,
+			HumanRiskFactor:      30,
+			DataConfidence:       0.85,
+		}
+		severity := "medium"
+		if concentration.ConcentrationIndex > 70 {
+			severity = "critical"
+		} else if concentration.ConcentrationIndex > 55 {
+			severity = "high"
+		}
+		topHotspot := "core modules"
+		if len(concentration.Hotspots) > 0 {
+			topHotspot = concentration.Hotspots[0].Path
+		}
+		recommendations = append(recommendations, ActionableRecommendation{
+			Type:          "review",
+			Target:        topHotspot,
+			TargetName:    "Change Concentration Hotspot",
+			Reason:        fmt.Sprintf("%.1f%% of changes concentrated in %.0f%% of files", concentration.ConcentrationIndex, math.Min(float64(len(concentration.Hotspots))/float64(concentration.TotalFilesTouched)*100, 100)),
+			Severity:      severity,
+			Impact:        "Review hotspots for architectural improvements or splitting",
+			PriorityScore: computePriorityScore(metrics),
+			Metrics:       metrics,
+		})
+	}
+
+	// Sort by descending priority score
+	sort.Slice(recommendations, func(i, j int) bool {
+		return recommendations[i].PriorityScore > recommendations[j].PriorityScore
+	})
+
+	// Limit to top 3 recommendations (max)
+	if len(recommendations) > 3 {
+		recommendations = recommendations[:3]
+	}
+
 	return recommendations
+}
+
+// ==================== ANALYSIS CONFIDENCE COMPUTATION ====================
+
+// computeAnalysisConfidence calculates confidence scores based on data quality
+func computeAnalysisConfidence(commitCount int, fileCount int, weeksCovered int, hasManifest bool) *AnalysisConfidence {
+	// Sample score: logarithmic scaling for commit count
+	sampleScore := math.Min(100, math.Log10(float64(commitCount+1))*40)
+	if commitCount < 10 {
+		sampleScore = float64(commitCount) * 5
+	}
+
+	// Temporal score: weeks covered (10 points per week, max 100)
+	temporalScore := math.Min(100, float64(weeksCovered)*12.5)
+
+	// Structural score: file count and manifest presence
+	structuralScore := math.Min(100, float64(fileCount)*0.5)
+	if hasManifest {
+		structuralScore = math.Min(100, structuralScore+30)
+	}
+
+	// Overall: weighted average (0-1 scale)
+	overall := (sampleScore*0.4 + temporalScore*0.35 + structuralScore*0.25) / 100
+
+	// Generate explanation
+	var explanation string
+	if overall >= 0.75 {
+		explanation = "High confidence: substantial data coverage"
+	} else if overall >= 0.5 {
+		explanation = "Moderate confidence: sufficient sample size"
+	} else if overall >= 0.3 {
+		explanation = "Limited confidence: sparse historical data"
+	} else {
+		explanation = "Low confidence: insufficient data for reliable analysis"
+	}
+
+	return &AnalysisConfidence{
+		SampleScore:     sampleScore,
+		TemporalScore:   temporalScore,
+		StructuralScore: structuralScore,
+		Overall:         overall,
+		Explanation:     explanation,
+	}
+}
+
+// ==================== PROJECT STATE MANAGEMENT ====================
+
+// getProjectState retrieves cached project state or nil if not found
+func getProjectState(projectKey string) *ProjectAnalysisState {
+	projectStateMutex.RLock()
+	defer projectStateMutex.RUnlock()
+	return projectStateCache[projectKey]
+}
+
+// saveProjectState stores project analysis state in memory
+func saveProjectState(state *ProjectAnalysisState) {
+	projectStateMutex.Lock()
+	defer projectStateMutex.Unlock()
+	projectStateCache[state.ProjectKey] = state
+	log.Printf("[TemporalMemory] Saved state for %s (baseline: %v)", state.ProjectKey, state.TemporalDeltas.IsBaseline)
+}
+
+// computeInputHash creates a simple hash from input data for cache invalidation
+func computeInputHash(data string) string {
+	h := sha256.New()
+	h.Write([]byte(data))
+	return fmt.Sprintf("%x", h.Sum(nil))[:16] // First 16 chars for brevity
+}
+
+// computeTemporalDeltas calculates changes between current and baseline analysis
+func computeTemporalDeltas(current, previous *ProjectAnalysisState, currentMetrics BaselineMetrics) TemporalDeltaSet {
+	if previous == nil {
+		return TemporalDeltaSet{
+			IsBaseline:        true,
+			PreviousRiskScore: currentMetrics.RiskScore,
+			Direction:         "baseline",
+			Significance:      "baseline",
+		}
+	}
+
+	// Compute deltas against baseline
+	riskDelta := currentMetrics.RiskScore - previous.BaselineMetrics.RiskScore
+	concentrationDelta := currentMetrics.ConcentrationIndex - previous.BaselineMetrics.ConcentrationIndex
+	busFactorDelta := currentMetrics.BusFactor - previous.BaselineMetrics.BusFactor
+	dependencyDelta := currentMetrics.DependencyHealth - previous.BaselineMetrics.DependencyHealth
+
+	// Determine direction based on risk delta (negative = improved)
+	direction := "stable"
+	if riskDelta <= -5.0 {
+		direction = "improved"
+	} else if riskDelta >= 5.0 {
+		direction = "degraded"
+	}
+
+	// Determine significance based on absolute delta
+	significance := "negligible"
+	absDelta := math.Abs(riskDelta)
+	if absDelta >= 15.0 {
+		significance = "major"
+	} else if absDelta >= 5.0 {
+		significance = "minor"
+	}
+
+	return TemporalDeltaSet{
+		IsBaseline:         false,
+		PreviousRiskScore:  previous.BaselineMetrics.RiskScore,
+		VelocityDelta:      0,
+		ConcentrationDrift: concentrationDelta,
+		OwnershipShift:     float64(busFactorDelta),
+		EntropyChange:      0,
+		RiskDelta:          riskDelta,
+		ConcentrationDelta: concentrationDelta,
+		BusFactorDelta:     busFactorDelta,
+		DependencyDelta:    dependencyDelta,
+		Direction:          direction,
+		Significance:       significance,
+	}
+}
+
+// ==================== WEAK SIGNAL DETECTION ====================
+
+// detectWeakSignals identifies early-stage degradation patterns from existing metrics
+func detectWeakSignals(trajectory *TrajectoryAnalysis, concentration *ConcentrationAnalysis, deps *DependencyAnalysis, deltas TemporalDeltaSet, commitCount int) []WeakSignal {
+	signals := make([]WeakSignal, 0)
+
+	// Anti-false-positive: Skip low-activity projects
+	if commitCount < 10 {
+		return signals
+	}
+
+	// 1. Ownership Drift Signal (concentration increasing + bus factor concern)
+	if concentration != nil && concentration.Available {
+		indicators := make([]string, 0)
+		if concentration.ConcentrationIndex > 30 && concentration.ConcentrationIndex < 60 {
+			indicators = append(indicators, "concentration_approaching_threshold")
+		}
+		if deltas.ConcentrationDelta > 3 && !deltas.IsBaseline {
+			indicators = append(indicators, "concentration_increasing")
+		}
+		if len(indicators) >= 2 {
+			confidence := float64(len(indicators)-1)*0.25 + 0.3
+			signals = append(signals, WeakSignal{
+				ID:            "ownership_drift",
+				Category:      "ownership_drift",
+				Section:       "concentration",
+				Indicators:    indicators,
+				Confidence:    math.Min(confidence, 0.9),
+				TrendDuration: 7,
+				Description:   "Ownership patterns may be consolidating; consider reviewing contributor distribution",
+			})
+		}
+	}
+
+	// 2. Churn Acceleration Signal (trajectory slope increasing)
+	if trajectory != nil && trajectory.Available {
+		indicators := make([]string, 0)
+		if trajectory.VelocityTrend == "accelerating" {
+			indicators = append(indicators, "velocity_accelerating")
+		}
+		if trajectory.OverallTrend == "increasing_risk" {
+			indicators = append(indicators, "risk_trend_increasing")
+		}
+		if deltas.RiskDelta > 3 && !deltas.IsBaseline {
+			indicators = append(indicators, "risk_above_baseline")
+		}
+		if len(indicators) >= 2 {
+			confidence := float64(len(indicators)-1)*0.25 + 0.3
+			signals = append(signals, WeakSignal{
+				ID:            "churn_acceleration",
+				Category:      "churn_acceleration",
+				Section:       "trajectory",
+				Indicators:    indicators,
+				Confidence:    math.Min(confidence, 0.9),
+				TrendDuration: 14,
+				Description:   "Change velocity appears to be increasing; monitoring for sustained pattern",
+			})
+		}
+	}
+
+	// 3. Dependency Stagnation Signal
+	if deps != nil && deps.Available {
+		indicators := make([]string, 0)
+		// Check if many dependencies exist (potential maintenance burden)
+		if len(deps.Nodes) > 20 {
+			indicators = append(indicators, "high_dependency_count")
+		}
+		if deltas.DependencyDelta < -5 && !deltas.IsBaseline {
+			indicators = append(indicators, "dependency_health_declining")
+		}
+		if deps.MaxFanIn > 5 {
+			indicators = append(indicators, "high_centrality_risk")
+		}
+		if len(indicators) >= 2 {
+			confidence := float64(len(indicators)-1)*0.25 + 0.3
+			signals = append(signals, WeakSignal{
+				ID:            "dependency_stagnation",
+				Category:      "dependency_stagnation",
+				Section:       "dependencies",
+				Indicators:    indicators,
+				Confidence:    math.Min(confidence, 0.9),
+				TrendDuration: 21,
+				Description:   "Dependency update velocity may be slowing; consider scheduling maintenance",
+			})
+		}
+	}
+
+	// Filter out low-confidence signals
+	filtered := make([]WeakSignal, 0)
+	for _, s := range signals {
+		if s.Confidence >= 0.3 {
+			filtered = append(filtered, s)
+		}
+	}
+
+	return filtered
+}
+
+// ==================== ARCHITECTURAL INTENT INFERENCE ====================
+
+// inferArchitecturalIntent detects design direction from observable evolution patterns
+func inferArchitecturalIntent(trajectory *TrajectoryAnalysis, deps *DependencyAnalysis, concentration *ConcentrationAnalysis, deltas TemporalDeltaSet) []ArchitecturalIntent {
+	intents := make([]ArchitecturalIntent, 0)
+
+	// 1. Stabilization tendency (decreasing velocity + low churn)
+	if trajectory != nil && trajectory.Available {
+		indicators := make([]string, 0)
+		if trajectory.VelocityTrend == "decelerating" {
+			indicators = append(indicators, "velocity_decelerating")
+		}
+		if trajectory.OverallTrend == "decreasing_risk" {
+			indicators = append(indicators, "risk_decreasing")
+		}
+		if deltas.RiskDelta < -3 && !deltas.IsBaseline {
+			indicators = append(indicators, "risk_below_baseline")
+		}
+		if len(indicators) >= 2 {
+			confidence := (float64(len(indicators)) - 1) * 0.3
+			intents = append(intents, ArchitecturalIntent{
+				Tendency:       "stabilization",
+				SignalStrength: math.Min(confidence+0.3, 0.9),
+				Indicators:     indicators,
+				Confidence:     confidence,
+				Description:    "Patterns suggest the codebase is entering a stabilization phase",
+			})
+		}
+	}
+
+	// 2. Feature growth tendency (accelerating + breadth increasing)
+	if trajectory != nil && trajectory.Available {
+		indicators := make([]string, 0)
+		if trajectory.VelocityTrend == "accelerating" {
+			indicators = append(indicators, "velocity_accelerating")
+		}
+		if trajectory.OverallTrend == "increasing_risk" {
+			indicators = append(indicators, "activity_increasing")
+		}
+		if len(indicators) >= 2 {
+			confidence := (float64(len(indicators)) - 1) * 0.3
+			intents = append(intents, ArchitecturalIntent{
+				Tendency:       "feature_growth",
+				SignalStrength: math.Min(confidence+0.3, 0.9),
+				Indicators:     indicators,
+				Confidence:     confidence,
+				Description:    "Patterns suggest active feature development phase",
+			})
+		}
+	}
+
+	// 3. Boundary hardening tendency (low concentration + distributed ownership)
+	if concentration != nil && concentration.Available && concentration.ConcentrationIndex < 30 {
+		indicators := make([]string, 0)
+		indicators = append(indicators, "low_concentration")
+		if deltas.ConcentrationDelta < 0 && !deltas.IsBaseline {
+			indicators = append(indicators, "concentration_decreasing")
+		}
+		if len(indicators) >= 2 {
+			confidence := (float64(len(indicators)) - 1) * 0.3
+			intents = append(intents, ArchitecturalIntent{
+				Tendency:       "boundary_hardening",
+				SignalStrength: math.Min(confidence+0.3, 0.9),
+				Indicators:     indicators,
+				Confidence:     confidence,
+				Description:    "Patterns suggest architectural boundaries are strengthening",
+			})
+		}
+	}
+
+	// Filter out low-confidence intents and suppress competing patterns
+	filtered := make([]ArchitecturalIntent, 0)
+	for _, intent := range intents {
+		if intent.Confidence >= 0.25 {
+			filtered = append(filtered, intent)
+		}
+	}
+
+	// Limit to top 2 intents to avoid noise
+	if len(filtered) > 2 {
+		filtered = filtered[:2]
+	}
+
+	return filtered
+}
+
+// ==================== TRUST & EXPLAINABILITY ====================
+
+// validateInsightChain ensures traceable path from raw data to insight
+func validateInsightChain(dataSources []string, intermediateMetrics []string, finalInsight string) bool {
+	// Chain is valid if:
+	// 1. At least one data source exists
+	// 2. At least one intermediate metric exists
+	// 3. Final insight is non-empty
+	return len(dataSources) > 0 && len(intermediateMetrics) > 0 && finalInsight != ""
+}
+
+// computeInsightCoverage calculates data coverage quality
+func computeInsightCoverage(commitCount int, fileCount int, weeksCovered int) float64 {
+	// Coverage based on data completeness
+	commitCoverage := math.Min(float64(commitCount)/50.0, 1.0)
+	fileCoverage := math.Min(float64(fileCount)/100.0, 1.0)
+	temporalCoverage := math.Min(float64(weeksCovered)/12.0, 1.0)
+
+	// Weighted average
+	coverage := commitCoverage*0.4 + fileCoverage*0.3 + temporalCoverage*0.3
+	return math.Min(coverage, 1.0)
+}
+
+// softenLanguage adjusts assertion strength based on confidence
+func softenLanguage(assertion string, confidence float64) string {
+	if confidence >= 0.75 {
+		return assertion // Assertive
+	} else if confidence >= 0.5 {
+		return "Analysis suggests: " + assertion // Moderate
+	} else if confidence >= 0.25 {
+		return "Preliminary analysis indicates: " + assertion // Cautious
+	}
+	return "" // Silent - suppress insight
+}
+
+// identifyBlindSpots detects known data gaps
+func identifyBlindSpots(hasCommits bool, hasTree bool, hasDeps bool) []string {
+	blindSpots := make([]string, 0)
+	if !hasCommits {
+		blindSpots = append(blindSpots, "limited_commit_history")
+	}
+	if !hasTree {
+		blindSpots = append(blindSpots, "incomplete_tree_structure")
+	}
+	if !hasDeps {
+		blindSpots = append(blindSpots, "no_dependency_manifest")
+	}
+	return blindSpots
+}
+
+// ==================== FAILURE SIMULATION ====================
+
+// simulateFailureScenarios generates counterfactual impact analysis for critical components
+func simulateFailureScenarios(deps *DependencyAnalysis, concentration *ConcentrationAnalysis) []FailureScenario {
+	scenarios := make([]FailureScenario, 0)
+
+	// 1. Simulate high-centrality dependency removal
+	if deps != nil && deps.Available {
+		for _, node := range deps.Nodes {
+			// Only simulate for high-centrality nodes
+			if node.FanIn >= 3 || node.FanOut >= 3 {
+				blastRadius := node.FanIn + node.FanOut
+				complexity := "medium"
+				if blastRadius > 10 {
+					complexity = "high"
+				} else if blastRadius < 5 {
+					complexity = "low"
+				}
+
+				confidence := math.Min(0.7+float64(blastRadius)*0.02, 0.95)
+				scenarios = append(scenarios, FailureScenario{
+					TargetID:           node.ID,
+					TargetType:         "dependency",
+					TargetName:         node.Name,
+					AffectedDomains:    []string{"downstream-consumers"},
+					BlastRadius:        blastRadius,
+					OwnershipStress:    0.0, // Not applicable for deps
+					RecoveryComplexity: complexity,
+					Confidence:         confidence,
+					Description:        fmt.Sprintf("If %s becomes unavailable, %d dependent modules would require immediate attention", node.Name, blastRadius),
+				})
+			}
+		}
+	}
+
+	// 2. Simulate ownership concentration as contributor loss risk
+	if concentration != nil && concentration.Available && concentration.ConcentrationIndex > 50 {
+		ownershipStress := concentration.ConcentrationIndex / 100.0
+		complexity := "medium"
+		if concentration.ConcentrationIndex > 70 {
+			complexity = "high"
+		}
+
+		confidence := math.Min(0.6+ownershipStress*0.3, 0.9)
+		scenarios = append(scenarios, FailureScenario{
+			TargetID:           "primary-contributor",
+			TargetType:         "contributor",
+			TargetName:         "Primary Knowledge Holder",
+			AffectedDomains:    []string{"high-concentration-modules"},
+			BlastRadius:        concentration.TotalFilesTouched,
+			OwnershipStress:    ownershipStress,
+			RecoveryComplexity: complexity,
+			Confidence:         confidence,
+			Description:        fmt.Sprintf("If the primary contributor becomes unavailable, %.1f%% of codebase knowledge would require redistribution", concentration.ConcentrationIndex),
+		})
+	}
+
+	// Filter low-confidence scenarios and limit
+	filtered := make([]FailureScenario, 0)
+	for _, s := range scenarios {
+		if s.Confidence >= 0.3 {
+			filtered = append(filtered, s)
+		}
+	}
+
+	// Limit to top 3 scenarios
+	if len(filtered) > 3 {
+		filtered = filtered[:3]
+	}
+
+	return filtered
 }
 
 // ==================== TEMPORAL HOTSPOT ANALYSIS ====================

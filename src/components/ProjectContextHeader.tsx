@@ -8,9 +8,14 @@ interface Props {
     projectId: string;
     className?: string;
     isAnalysisReady?: boolean;
+    analysisContext?: {
+        commitCount?: number;
+        lastComputedAt?: string;
+        commitRange?: string;
+    };
 }
 
-export default function ProjectContextHeader({ title, projectId, className, isAnalysisReady = true }: Props) {
+export default function ProjectContextHeader({ title, projectId, className, isAnalysisReady = true, analysisContext }: Props) {
     const [owner, repo] = projectId.split('/');
 
     return (
@@ -44,6 +49,17 @@ export default function ProjectContextHeader({ title, projectId, className, isAn
                         <h1 className="text-lg sm:text-2xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none break-words">
                             {title}
                         </h1>
+                        {/* Analysis Context Metadata */}
+                        {analysisContext && (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[8px] md:text-[9px] font-medium uppercase tracking-wider text-white/30">
+                                {analysisContext.commitCount && (
+                                    <span>Analyzed from {analysisContext.commitCount} commits</span>
+                                )}
+                                {analysisContext.lastComputedAt && (
+                                    <span className="hidden sm:inline">• Last computed: {analysisContext.lastComputedAt}</span>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 

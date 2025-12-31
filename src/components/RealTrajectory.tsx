@@ -119,12 +119,16 @@ export default function RealTrajectory({ projectId, onLoadingChange }: Props) {
             <ProjectContextHeader title="Risk Trajectory" projectId={projectId} />
 
             {/* Velocity Controls (Integrated into Header Row) */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
-                <div>
-                    <div className="flex items-center gap-3 mb-1">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 px-2">
+                <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
                         <History className="text-purple-400" size={18} />
                         <h2 className="text-[10px] md:text-sm font-black uppercase tracking-widest text-white/30">Architectural Pulse</h2>
                     </div>
+                    {/* Contextual Explanation */}
+                    <p className="text-xs text-white/40 leading-relaxed max-w-xl">
+                        Derived from commit velocity, structural change density, and contributor impact over {trajectory.totalWeeks} weeks of repository activity.
+                    </p>
                 </div>
 
 
@@ -255,21 +259,21 @@ export default function RealTrajectory({ projectId, onLoadingChange }: Props) {
                     title="Computed Velocity"
                     value={`${trajectory.velocityFactor.toFixed(1)}x`}
                     trend={trajectory.velocityTrend}
-                    description="Change frequency relative to baseline"
+                    description={`Change intensity per time window. ${trajectory.velocityFactor > 1.2 ? 'Higher than baseline.' : trajectory.velocityFactor < 0.8 ? 'Lower than baseline.' : 'Near baseline levels.'}`}
                     icon={Zap}
                 />
                 <MetricCard
                     title="Risk Direction"
                     value={trajectory.overallTrend.replace('_', ' ')}
                     trend={trajectory.overallTrend === 'increasing_risk' ? 'down' : 'up'}
-                    description={`Confidence: ${trajectory.confidenceLevel}`}
+                    description={`Based on slope analysis with ${trajectory.confidenceLevel} confidence. ${trajectory.overallTrend === 'increasing_risk' ? 'Upward trend detected.' : trajectory.overallTrend === 'decreasing_risk' ? 'Downward trend detected.' : 'Trajectory is stable.'}`}
                     icon={Activity}
                 />
                 <MetricCard
                     title="Peak Risk"
                     value={trajectory.peakRiskScore.toFixed(0)}
                     trend="neutral"
-                    description={`Week: ${trajectory.peakRiskWeek || 'N/A'}`}
+                    description={`Maximum structural stress observed${trajectory.peakRiskWeek ? ` during week ${trajectory.peakRiskWeek}` : ''}.`}
                     icon={TrendingUp}
                 />
             </div>

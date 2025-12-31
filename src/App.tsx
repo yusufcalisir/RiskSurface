@@ -275,10 +275,17 @@ export default function App() {
     const handleDisconnect = async () => {
         try {
             await fetch(`${API_BASE}/api/github/disconnect`, { method: 'POST' });
+            // Clear all authentication state
             setConnection(null);
             setProjects([]);
+            // Clear all navigation and analysis state
             setSelectedProject(null);
             setActiveTab('projects');
+            setAnalyzingProject(null);
+            setIsAnalysisReady(false);
+            setProjectVersion(0);
+            // Force navigation to projects route
+            navigate('/projects');
         } catch (err) {
             console.error('Failed to disconnect');
         }
@@ -441,7 +448,10 @@ export default function App() {
                             </div>
                             {!isSidebarCollapsed && (
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-black text-white truncate uppercase tracking-tight">{connection.username}</div>
+                                    <div className="text-xs font-black text-white truncate lowercase tracking-tight">{connection.username}</div>
+                                    {connection.organization && (
+                                        <div className="text-[10px] text-white/50 truncate">{connection.organization}</div>
+                                    )}
                                     <div className="text-[10px] text-muted font-mono">{projects.length} Repositories</div>
                                 </div>
                             )}
@@ -633,12 +643,12 @@ export default function App() {
                     {(isAnalysisReady && !isTabLoading) && (
                         <footer className="text-center py-1 mt-auto opacity-30 hover:opacity-100 transition-opacity">
                             <a
-                                href="https://github.com/repository/RiskSurface"
+                                href="https://github.com/yusufcalisir"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[8px] text-muted hover:text-white transition-colors uppercase tracking-widest font-black"
                             >
-                                © 2025 RiskSurface - Made by Engineering Team
+                                © 2025 RiskSurface - Made by Yusuf Çalışır
                             </a>
                         </footer>
                     )}

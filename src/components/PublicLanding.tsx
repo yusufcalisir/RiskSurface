@@ -65,12 +65,8 @@ export default function PublicLanding() {
                 <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="flex items-center gap-2 md:gap-3"
+                    className="flex items-center"
                 >
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md shadow-2xl relative group overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <img src="/rs-logo.png" alt="RS" className="w-5 h-5 md:w-6 md:h-6 invert opacity-90 relative z-10" />
-                    </div>
                     <span className="font-black tracking-[-0.05em] text-lg md:text-2xl text-white">REPOANALYST</span>
                 </motion.div>
 

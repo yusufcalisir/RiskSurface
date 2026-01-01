@@ -172,7 +172,7 @@ export default function ConnectionPage({ onConnected }: ConnectionPageProps) {
                         color: '#fff',
                         margin: 0,
                         letterSpacing: -1
-                    }}>RISKSURFACE</h1>
+                    }}>REPOANALYST</h1>
                     <p style={{ fontSize: 14, color: '#666', margin: '8px 0 0' }}>
                         Connect your repository to begin analysis
                     </p>

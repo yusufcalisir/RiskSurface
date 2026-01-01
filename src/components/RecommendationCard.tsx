@@ -311,7 +311,7 @@ export const RecommendationCard: React.FC<Props> = ({ onTabChange }) => {
                     Last Forecast: {predictions.generatedAt ? new Date(predictions.generatedAt).toLocaleTimeString() : 'N/A'}
                 </span>
                 < span className="text-[8px] text-blue-400/40 font-black uppercase tracking-[0.3em]" >
-                    RiskSurface
+                    RepoAnalyst
                 </span>
             </div>
         </div>

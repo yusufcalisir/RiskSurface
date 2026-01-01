@@ -71,7 +71,7 @@ export default function PublicLanding() {
                         <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         <img src="/rs-logo.png" alt="RS" className="w-5 h-5 md:w-6 md:h-6 invert opacity-90 relative z-10" />
                     </div>
-                    <span className="font-black tracking-[-0.05em] text-lg md:text-2xl text-white">RISKSURFACE</span>
+                    <span className="font-black tracking-[-0.05em] text-lg md:text-2xl text-white">REPOANALYST</span>
                 </motion.div>
 
                 <nav className="hidden md:flex items-center gap-10">
@@ -131,7 +131,7 @@ export default function PublicLanding() {
                             transition={{ duration: 1, delay: 0.4 }}
                             className="text-base md:text-lg text-white/40 font-medium leading-[1.6] max-w-xl mb-8"
                         >
-                            RiskSurface transforms the hidden signals in your Git history into
+                            RepoAnalyst transforms the hidden signals in your Git history into
                             computational risk vectors. Map fragility, temporal hotspots,
                             and bus-factor concentration with avant-garde precision.
                         </motion.p>
@@ -292,7 +292,7 @@ export default function PublicLanding() {
                                     Computed <br /> from <span className="text-indigo-400 italic">truth</span>
                                 </h2>
                                 <p className="text-white/40 text-xl font-medium">
-                                    RiskSurface integrates directly with your source tree history.
+                                    RepoAnalyst integrates directly with your source tree history.
                                     No heuristics, no placeholders—just verified engineering intelligence.
                                 </p>
                             </div>
@@ -396,7 +396,7 @@ export default function PublicLanding() {
                     <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between gap-16 md:gap-24">
                         <div className="space-y-6 lg:max-w-sm">
                             <div className="flex items-center gap-3">
-                                <span className="font-black tracking-[-0.05em] text-3xl text-white">RISKSURFACE</span>
+                                <span className="font-black tracking-[-0.05em] text-3xl text-white">REPOANALYST</span>
                             </div>
                             <p className="text-white/20 text-[10px] md:text-xs font-black uppercase tracking-[0.3em] leading-relaxed">
                                 Advanced Source Code Risk Intelligence Framework
@@ -405,8 +405,8 @@ export default function PublicLanding() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-12 md:gap-x-24 gap-y-12">
                             {[
-                                { title: 'Legal', links: [{ label: 'OSS License', url: 'https://github.com/yusufcalisir/RiskSurface/blob/main/LICENSE' }] },
-                                { title: 'Network', links: [{ label: 'LinkedIn', url: 'https://www.linkedin.com/in/yusufcalisir/' }, { label: 'GitHub Repo', url: 'https://github.com/yusufcalisir/RiskSurface' }] },
+                                { title: 'Legal', links: [{ label: 'OSS License', url: 'https://github.com/yusufcalisir/RepoAnalyst/blob/main/LICENSE' }] },
+                                { title: 'Network', links: [{ label: 'LinkedIn', url: 'https://www.linkedin.com/in/yusufcalisir/' }, { label: 'GitHub Repo', url: 'https://github.com/yusufcalisir/RepoAnalyst' }] },
                                 { title: 'Contact', links: [{ label: 'Consultancy', url: 'https://www.linkedin.com/in/yusufcalisir/' }] }
                             ].map(group => (
                                 <div key={group.title} className="flex flex-col gap-4 md:gap-5">
@@ -431,7 +431,7 @@ export default function PublicLanding() {
                     </div>
                     <div className="max-w-7xl mx-auto pt-12 md:pt-20 mt-12 md:mt-20 border-t border-white/[0.03] flex flex-col sm:flex-row justify-between items-center gap-6 text-[10px] font-black uppercase tracking-[0.5em] text-white/10 text-center sm:text-left">
                         <span>© 2025 Product Intelligence</span>
-                        <a href="https://github.com/yusufcalisir/RiskSurface" className="hover:text-white transition-colors">By Yusuf Çalışır</a>
+                        <a href="https://github.com/yusufcalisir/RepoAnalyst" className="hover:text-white transition-colors">By Yusuf Çalışır</a>
                     </div>
                 </footer>
             </main>

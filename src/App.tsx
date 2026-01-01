@@ -382,7 +382,7 @@ export default function App() {
                         isSidebarCollapsed && "md:hidden"
                     )}
                 >
-                    RISKSURFACE
+                    REPOANALYST
                 </motion.span>
                 <button
                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -557,7 +557,7 @@ export default function App() {
                             </span>
                             <div className="flex items-baseline gap-2 min-w-0">
                                 <h1 className="text-xs sm:text-lg md:text-xl font-black text-white uppercase tracking-tighter truncate max-w-[120px] sm:max-w-none">
-                                    {activeTab === 'projects' ? 'Management' : currentProject?.name || 'RiskSurface'}
+                                    {activeTab === 'projects' ? 'Management' : currentProject?.name || 'RepoAnalyst'}
                                 </h1>
                                 {currentProject && activeTab !== 'projects' && (
                                     <span className="hidden sm:block text-[9px] uppercase font-bold text-white/20 tracking-widest truncate">
@@ -664,12 +664,12 @@ export default function App() {
                     {(isAnalysisReady && !isTabLoading) && (
                         <footer className="text-center py-1 mt-auto opacity-30 hover:opacity-100 transition-opacity">
                             <a
-                                href="https://github.com/yusufcalisir/RiskSurface"
+                                href="https://github.com/yusufcalisir/RepoAnalyst"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[8px] text-muted hover:text-white transition-colors uppercase tracking-widest font-black"
                             >
-                                © 2025 RiskSurface - Made by Yusuf Çalışır
+                                © 2025 RepoAnalyst - Made by Yusuf Çalışır
                             </a>
                         </footer>
                     )}
@@ -812,7 +812,7 @@ function TacticalLoader() {
                             <Activity size={32} className="text-risk-high relative z-10 hidden md:block drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
                         </div>
                         <h1 className="text-3xl md:text-7xl font-black tracking-[0.1em] md:tracking-[0.25em] text-white selection:bg-risk-high/30 leading-none">
-                            RISKSURFACE
+                            REPOANALYST
                         </h1>
                     </div>
 

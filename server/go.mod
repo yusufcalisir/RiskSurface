@@ -1,4 +1,4 @@
-module risksurface-server
+module repoanalyst-server
 
 go 1.21
 

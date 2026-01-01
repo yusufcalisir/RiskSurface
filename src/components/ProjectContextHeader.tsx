@@ -35,7 +35,7 @@ export default function ProjectContextHeader({ title, projectId, className, isAn
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
                         <img
                             src="/rs-logo.png"
-                            alt="RiskSurface"
+                            alt="RepoAnalyst"
                             className="w-5 h-5 md:w-6 md:h-6 object-contain invert opacity-80"
                         />
                     </div>

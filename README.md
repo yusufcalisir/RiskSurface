@@ -1,10 +1,10 @@
-# ⚡ RISKSURFACE | DESTROY TECHNICAL DEBT 🛡️
+# ⚡ REPOANALYST | DESTROY TECHNICAL DEBT 🛡️
 
 <div align="center">
 
 ## 🚀 **[LAUNCH DEMO](https://risk-surface.vercel.app/)** 🚀
 
-[![Live](https://img.shields.io/badge/🔥_LIVE_NOW-RiskSurface-ff6b6b?style=for-the-badge)](https://risk-surface.vercel.app/)
+[![Live](https://img.shields.io/badge/🔥_LIVE_NOW-RepoAnalyst-ff6b6b?style=for-the-badge)](https://risk-surface.vercel.app/)
 
 </div>
 
@@ -13,9 +13,9 @@
 
 # 🚀 ARCHITECTURAL SUPREMACY THROUGH DATA
 
-RiskSurface is the ultimate weapon for engineering leaders plus elite architects. Stop flying blind in your codebase. We deliver absolute visibility plus mathematical clarity into the most complex software ecosystems on earth.
+RepoAnalyst is the ultimate weapon for engineering leaders plus elite architects. Stop flying blind in your codebase. We deliver absolute visibility plus mathematical clarity into the most complex software ecosystems on earth.
 
-Our engine shreds through thousands of commits plus files to expose the hidden structural fractures of your system. Whether you are leading a high growth startup or managing a legacy titan RiskSurface gives you the surgical tools to stabilize plus dominate.
+Our engine shreds through thousands of commits plus files to expose the hidden structural fractures of your system. Whether you are leading a high growth startup or managing a legacy titan RepoAnalyst gives you the surgical tools to stabilize plus dominate.
 
 
 ---
@@ -39,7 +39,7 @@ Predict system failure before it happens. We analyze code churn plus commit velo
 ---
 
 ### ☢️ GLOBAL BLAST RADIUS ANALYSIS
-Calculate the lethal zone of a single modification. By mapping deep transitive dependency chains RiskSurface shows you the ripple effects before you even open a pull request.
+Calculate the lethal zone of a single modification. By mapping deep transitive dependency chains RepoAnalyst shows you the ripple effects before you even open a pull request.
 * Transitive dependency discovery logic.
 * Module fragility percentage metrics.
 * Transitory risk identification patterns.
@@ -89,7 +89,7 @@ Our backend is a high performance engine designed for real-time analysis of mult
 ---
 
 ## 📱 VISUAL INTEGRITY | RESPONSIVE FIRST
-RiskSurface is engineered for tactical deployment on any device.
+RepoAnalyst is engineered for tactical deployment on any device.
 * **Mobile-Optimized Layouts**: Bespoke CSS architecture ensuring zero overflow on narrow viewports.
 * **Intelligent Truncation**: Precision font scaling and truncation for deep file systems.
 * **Touch-Ready Controls**: High-fidelity interactions optimized for mobile and desktop parity.
@@ -167,7 +167,7 @@ Access the command center via `http://localhost:5173`.
 
 ## 🛡️ THE FORTRESS | TOTAL PRIVACY SOVEREIGNTY
 
-We treat your intellectual property with absolute respect. RiskSurface is built on a philosophy of total containment.
+We treat your intellectual property with absolute respect. RepoAnalyst is built on a philosophy of total containment.
 * ZERO CLOUD STORAGE : All data stays local in your `state.json`.
 * VOLATILE CREDENTIALS : GitHub keys are held in memory only plus vanish immediately.
 * LOCAL SOVEREIGNTY : No tracking plus no telemetry plus zero external calls.
@@ -175,5 +175,5 @@ We treat your intellectual property with absolute respect. RiskSurface is built 
 ---
 
 DOMINATE YOUR DEBT. STABILIZE YOUR FUTURE.
-RiskSurface | VISUAL INTELLIGENCE FOR ELITE ARCHITECTS
+RepoAnalyst | VISUAL INTELLIGENCE FOR ELITE ARCHITECTS
 2025 EDITION

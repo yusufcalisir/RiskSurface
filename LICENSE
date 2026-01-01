@@ -1,4 +1,4 @@
-RISKSURFACE PROPRIETARY SOFTWARE LICENSE AGREEMENT
+REPOANALYST PROPRIETARY SOFTWARE LICENSE AGREEMENT
 ================================================================================
 
 Copyright (c) 2024-2025 Yusuf Çalışır. All Rights Reserved.
@@ -11,7 +11,7 @@ UNDERSTOOD, AND AGREE TO BE BOUND BY THE TERMS AND CONDITIONS OF THIS LICENSE.
 1. DEFINITIONS
 ================================================================================
 
-"Software" refers to RiskSurface, including but not limited to all source code,
+"Software" refers to RepoAnalyst, including but not limited to all source code,
 object code, documentation, user interfaces, APIs, algorithms, data structures,
 design elements, visual assets, and any associated materials.
 
@@ -57,11 +57,11 @@ b) UNAUTHORIZED DISTRIBUTION: Copy, distribute, publish, or disseminate the
 c) REVERSE ENGINEERING: Decompile, disassemble, reverse engineer, or attempt
    to derive the source code, algorithms, or data structures of the Software.
 
-d) TRADEMARK VIOLATION: Use the name "RiskSurface", associated logos, or any
+d) TRADEMARK VIOLATION: Use the name "RepoAnalyst", associated logos, or any
    trademarks of the Licensor without explicit written permission.
 
 e) COMPETING PRODUCTS: Use any part of the Software to develop, market, or
-   distribute a product or service that competes with RiskSurface.
+   distribute a product or service that competes with RepoAnalyst.
 
 f) UNAUTHORIZED MODIFICATIONS: Modify, adapt, translate, or create derivative
    works based on the Software without prior written consent.
